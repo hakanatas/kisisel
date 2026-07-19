@@ -396,6 +396,21 @@ export function buildWorld(engine, models = {}) {
       glowPts.push({ x: lx, y: 2.55, z: lz, r: 1.4, color: [1, 0.78, 0.4] });
     }
   }
+  if (models.hasGrass) {
+    const gh = (n) => { const s = Math.sin(n * 137.3) * 43758.5; return s - Math.floor(s); };
+    const lawns = [[-30, -24, 12], [-30, 22, 11], [18, -24, 10], [8, 26, 8], [-6, -30, 6]];
+    lawns.forEach(([px, pz, pr], li) => {
+      for (let i = 0; i < 6; i++) {
+        const a = gh(li * 53 + i * 7) * Math.PI * 2;
+        const rr = Math.sqrt(gh(li * 91 + i * 13)) * (pr - 1.2);
+        glbProps.push({
+          type: "grass",
+          x: px + Math.cos(a) * rr, z: pz + Math.sin(a) * rr,
+          yaw: gh(i * 3 + li) * Math.PI * 2, s: 0.8 + gh(li + i * 17) * 0.8,
+        });
+      }
+    });
+  }
   /* pale rocks */
   for (const [x, z, s] of [[-9, 27, 1], [22, 27, 0.8], [-38, -8, 1.2], [30, -7, 0.7], [6, -20, 0.6], [-15, 12, 0.55]]) {
     box(props, 0.8 * s, 0.5 * s, 0.6 * s, [0.88, 0.85, 0.82], { cx: x, cz: z });

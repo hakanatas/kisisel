@@ -26,15 +26,12 @@ const shadowMat = mat4ShadowY(LIGHT, 0.02);
 const SHADOW = { override: [0.2, 0.13, 0.38], alpha: 0.48 }; // purple dusk shadows
 
 /* load Hakan's GLB models (graceful fallback to primitives) */
+const loadCard = document.querySelector("#loading .load-card");
+const setLoad = (msg) => { if (loadCard) loadCard.textContent = msg; };
+
 const models = {};
 let carGLB = null;
-try {
-  const g = await loadGLB("assets/galata.glb", engine);
-  models.galata = { nodes: g.nodes, bounds: vertsBounds(g.nodes.map((n) => n.verts)) };
-} catch (e) { console.warn("galata.glb yüklenemedi", e); }
-try {
-  carGLB = await loadGLB("assets/car.glb", engine);
-} catch (e) { console.warn("car.glb yüklenemedi", e); }
+setLoad("Modeller yükleniyor…");
 
 /* community tree models (CC-BY, see README credits) */
 async function loadTreeType(url, targetH) {
@@ -53,14 +50,11 @@ async function loadTreeType(url, targetH) {
   });
 }
 const treeTypes = [];
-for (const [url, h] of [["assets/tree1.glb", 4.6]]) {
-  try { treeTypes.push(await loadTreeType(url, h)); } catch (e) { console.warn(url, "yüklenemedi", e); }
-}
-models.treeCount = treeTypes.length;
 
 /* pre-baked props: GLB textures baked to vertex colors offline (tiny JSON) */
 const propTypes = {};
 async function loadBaked(url, targetH) {
+  // eslint-disable-next-line no-use-before-define
   const g = await (await fetch(url)).json();
   const b = vertsBounds([g.verts]);
   const s = targetH / (b.maxY - b.minY);
@@ -73,10 +67,31 @@ async function loadBaked(url, targetH) {
   }
   return [{ mesh: engine.meshFromGeo({ verts: v }), texture: null }];
 }
-try { propTypes.lamp = await loadBaked("assets/lamp.json", 2.9); } catch (e) { console.warn("lamp yüklenemedi", e); }
+/* fetch + decode everything concurrently (much faster than sequential) */
+const [rGalata, rCar, rTree, rLamp, rGrass] = await Promise.allSettled([
+  loadGLB("assets/galata.glb", engine),
+  loadGLB("assets/car.glb", engine),
+  loadTreeType("assets/tree1.glb", 4.6),
+  loadBaked("assets/lamp.json", 2.9),
+  loadBaked("assets/grass.json", 0.5),
+]);
+if (rGalata.status === "fulfilled") {
+  models.galata = { nodes: rGalata.value.nodes, bounds: vertsBounds(rGalata.value.nodes.map((n) => n.verts)) };
+} else console.warn("galata.glb yüklenemedi", rGalata.reason);
+if (rCar.status === "fulfilled") carGLB = rCar.value;
+else console.warn("car.glb yüklenemedi", rCar.reason);
+if (rTree.status === "fulfilled") treeTypes.push(rTree.value);
+else console.warn("tree1.glb yüklenemedi", rTree.reason);
+if (rLamp.status === "fulfilled") propTypes.lamp = rLamp.value;
+else console.warn("lamp yüklenemedi", rLamp.reason);
+if (rGrass.status === "fulfilled") propTypes.grass = rGrass.value;
+else console.warn("grass yüklenemedi", rGrass.reason);
+models.treeCount = treeTypes.length;
 models.hasLamp = !!propTypes.lamp;
+models.hasGrass = !!propTypes.grass;
 models.hasBench = false;
 
+setLoad("Dünya inşa ediliyor…");
 const world = buildWorld(engine, models);
 
 /* static GLB instances (trees + props) with precomputed matrices */
