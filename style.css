@@ -330,4 +330,7 @@ body {
 .link { color: var(--accent); font-weight: 600; text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
+.plink { color: inherit; text-decoration: none; }
+.plink:hover { color: var(--accent); }
+
 .contact-links { line-height: 2.1; }
