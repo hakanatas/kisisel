@@ -4,6 +4,8 @@ import { geo, box } from "./meshes.js";
 import { buildWorld, ZONES, BOUNDS, PIER } from "./world.js";
 import { buildCarMeshes, Car } from "./car.js";
 import { AudioSys } from "./audio.js";
+import { loadGLB, vertsBounds } from "./glb.js";
+import { Achievements } from "./achievements.js";
 
 const canvas = document.getElementById("game");
 const params = new URLSearchParams(location.search);
@@ -23,15 +25,27 @@ const LIGHT = [0.72, 0.5, 0.3]; // must match engine's sun
 const shadowMat = mat4ShadowY(LIGHT, 0.02);
 const SHADOW = { override: [0.2, 0.13, 0.38], alpha: 0.48 }; // purple dusk shadows
 
-const world = buildWorld(engine);
+/* load Hakan's GLB models (graceful fallback to primitives) */
+const models = {};
+let carGLB = null;
+try {
+  const g = await loadGLB("assets/galata.glb", engine);
+  models.galata = { nodes: g.nodes, bounds: vertsBounds(g.nodes.map((n) => n.verts)) };
+} catch (e) { console.warn("galata.glb yüklenemedi", e); }
+try {
+  carGLB = await loadGLB("assets/car.glb", engine);
+} catch (e) { console.warn("car.glb yüklenemedi", e); }
+
+const world = buildWorld(engine, models);
 if (params.has("tex")) {
   const dc = world.debugCanvas;
   dc.style.cssText = "position:fixed;inset:0;width:100vw;height:auto;z-index:99;background:#fff";
   document.body.appendChild(dc);
 }
-const carMeshes = buildCarMeshes(engine);
+const carMeshes = buildCarMeshes(engine, carGLB);
 const car = new Car();
 const audio = new AudioSys();
+const ach = new Achievements(audio);
 
 /* tiny unit meshes for particles & skid marks */
 const cubeG = geo(); box(cubeG, 1, 1, 1, [1, 1, 1], { centered: true });
@@ -95,7 +109,7 @@ window.addEventListener("keydown", (e) => {
   keys.add(e.key.toLowerCase());
   if (e.key.toLowerCase() === "r") { car.reset(); resetDynamics(); }
   if (e.key.toLowerCase() === "m") setMuted(audio.toggleMute());
-  if (e.key === "Escape") closePanel();
+  if (e.key === "Escape") { closePanel(); ach.toggle(false); }
   start();
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
@@ -149,6 +163,7 @@ function start() {
   if (!started) {
     started = true;
     document.getElementById("intro").classList.add("hidden");
+    ach.bump("start");
   }
   audio.init();
 }
@@ -219,6 +234,12 @@ function updateDynamics(dt) {
       d.wpitch = 3 + Math.random() * 5;
       car.vx *= 0.94; car.vz *= 0.94;
       audio.thump(carSpeed / 8);
+      if (!d.knocked) {
+        d.knocked = true;
+        ach.bump("knock");
+        if (d.kind === "letter") ach.mark("letters", d.id);
+        if (d.kind === "pin") ach.mark("pins", d.id);
+      }
     }
     const moving = Math.abs(d.vx) + Math.abs(d.vy) + Math.abs(d.vz) > 0.01 || d.y > 0.001;
     if (!moving) continue;
@@ -292,6 +313,7 @@ function updateZones() {
   }
   if (inside && activeZone !== inside.id) {
     activeZone = inside.id;
+    ach.mark("zones", inside.id);
     openPanel(inside.id);
     zoneToast.textContent = inside.label;
     zoneToast.classList.add("show");
@@ -344,6 +366,8 @@ function updateCamera(dt) {
 
 /* ---------- HUD ---------- */
 const speedEl = document.getElementById("speed");
+let achDist = 0;
+if (params.has("ach")) ach.toggle(true);
 
 /* ---------- movers ---------- */
 function updateMovers(dt, time) {
@@ -386,6 +410,12 @@ function frame(now) {
     updateZones();
     addSkids(dt);
     updateExhaust(dt);
+    // achievement trackers
+    const spd = Math.abs(car.speed);
+    achDist += spd * dt;
+    if (achDist > 25) { ach.bump("dist", achDist); achDist = 0; }
+    if (spd * 4.5 >= 60) ach.top("speed", 1);
+    if (car.x > BOUNDS.maxX + 0.5) ach.top("pier", 1);
   }
   updateCamera(dt);
   updateMovers(dt, time);
@@ -413,7 +443,7 @@ function frame(now) {
     engine.draw(quadMesh, mat4Compose(s.x, 0.018, s.z, s.yaw, 0, 0, 1), { alpha: 0.3, noDepthWrite: true, override: [0.2, 0.21, 0.24] });
   }
 
-  const cm = car.matrices();
+  const cm = car.matrices(carMeshes.fromGLB ? carMeshes.wheelPos : undefined);
 
   /* 3 — projected shadows (each pixel darkened once via stencil) */
   if (!params.has("nosh")) {
@@ -456,8 +486,16 @@ function frame(now) {
   }
 
   /* car */
-  engine.draw(carMeshes.body, cm.body);
-  for (const w of cm.wheels) engine.draw(carMeshes.wheel, w);
+  if (carMeshes.fromGLB) {
+    engine.draw(carMeshes.body, cm.body, { texture: carMeshes.bodyTexture });
+    cm.wheels.forEach((w, i) => {
+      const side = carMeshes.wheelPos[i][0] < 0 ? carMeshes.wheelR : carMeshes.wheelL;
+      engine.draw(side.mesh, w, { texture: side.texture });
+    });
+  } else {
+    engine.draw(carMeshes.body, cm.body);
+    for (const w of cm.wheels) engine.draw(carMeshes.wheel, w);
+  }
 
   /* glows: lanterns + headlights + taillights */
   for (const g of world.glowPts) drawGlow(g.x, g.y, g.z, g.r, g.color, 0.5);

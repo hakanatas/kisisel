@@ -3,7 +3,57 @@
 import { geo, box, cylinder, transformGeo } from "./meshes.js";
 import { mat4Compose, clamp } from "./math3d.js";
 
-export function buildCarMeshes(engine) {
+export function buildCarMeshes(engine, glb = null) {
+  if (glb) {
+    // Kenney-style GLB: body + spoiler + 4 named wheel nodes
+    const S = 1.6; // model → world scale
+    const bodyVerts = [];
+    let wheelL = null, wheelR = null;
+    const wheelPos = [];
+    // if the colormap texture is missing, tint parts by node name
+    const tintFor = (n) => {
+      if (n.texture) return null;
+      if (n.name.startsWith("wheel")) return [0.15, 0.14, 0.18];
+      if (n.name.includes("spoiler")) return [0.58, 0.12, 0.12];
+      return [0.82, 0.19, 0.17];
+    };
+    const applyTint = (v, tint) => {
+      if (!tint) return;
+      for (let i = 0; i < v.length; i += 11) {
+        v[i + 6] = tint[0]; v[i + 7] = tint[1]; v[i + 8] = tint[2];
+      }
+    };
+    for (const n of glb.nodes) {
+      if (n.name.startsWith("wheel")) {
+        // recentre the wheel around its own hub so it can spin
+        let cx = 0, cy = 0, cz = 0, cnt = 0;
+        for (let i = 0; i < n.verts.length; i += 11) { cx += n.verts[i]; cy += n.verts[i + 1]; cz += n.verts[i + 2]; cnt++; }
+        cx /= cnt; cy /= cnt; cz /= cnt;
+        const v = Float32Array.from(n.verts);
+        for (let i = 0; i < v.length; i += 11) {
+          v[i] = (v[i] - cx) * S; v[i + 1] = (v[i + 1] - cy) * S; v[i + 2] = (v[i + 2] - cz) * S;
+        }
+        applyTint(v, tintFor(n));
+        wheelPos.push([cx * S, cy * S, cz * S, n.name.includes("front")]);
+        if (n.name.includes("left") && !wheelL) wheelL = { mesh: engine.meshFromGeo({ verts: v }), texture: n.texture };
+        if (n.name.includes("right") && !wheelR) wheelR = { mesh: engine.meshFromGeo({ verts: v }), texture: n.texture };
+      } else {
+        const v = Float32Array.from(n.verts);
+        for (let i = 0; i < v.length; i += 11) { v[i] *= S; v[i + 1] *= S; v[i + 2] *= S; }
+        applyTint(v, tintFor(n));
+        for (let i = 0; i < v.length; i++) bodyVerts.push(v[i]);
+        if (!buildCarMeshes.bodyTexture) buildCarMeshes.bodyTexture = n.texture;
+      }
+    }
+    return {
+      body: engine.meshFromGeo({ verts: bodyVerts }),
+      bodyTexture: buildCarMeshes.bodyTexture,
+      wheelL, wheelR,
+      wheelPos,
+      fromGLB: true,
+    };
+  }
+
   const bodyG = geo();
   const RED = [0.82, 0.18, 0.16];
   const RED2 = [0.6, 0.12, 0.12];
@@ -118,10 +168,9 @@ export class Car {
   }
 
   /* model matrices for body + 4 wheels */
-  matrices() {
-    const m = [];
+  matrices(customWheelPos) {
     const body = mat4Compose(this.x, 0.06 + 0, this.z, this.yaw, this.pitch, this.roll);
-    const wheelPos = [
+    const wheelPos = customWheelPos || [
       [-0.58, 0.3, 0.72, true], [0.58, 0.3, 0.72, true],   // front
       [-0.58, 0.3, -0.72, false], [0.58, 0.3, -0.72, false], // rear
     ];

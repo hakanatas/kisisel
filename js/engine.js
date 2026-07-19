@@ -202,6 +202,21 @@ export class Engine {
     return { vbo, count: data.length / 11 };
   }
 
+  /* glTF images: UV origin is top-left, so upload without the flip */
+  textureFromImage(img) {
+    const gl = this.gl;
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    return tex;
+  }
+
   textureFromCanvas(cnv, size, mips) {
     const gl = this.gl;
     if (size) { cnv.width = size; cnv.height = size; const c = cnv.getContext("2d"); c.fillStyle = "#fff"; c.fillRect(0, 0, size, size); }

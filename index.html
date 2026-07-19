@@ -62,10 +62,23 @@
     <span class="hud-brand">HA<span class="dot">.</span></span>
     <span class="hud-hint">Drive into a colored circle to open a section</span>
     <span class="hud-right">
+      <button id="achBtn" class="hud-mute" aria-label="Achievements">🏆</button>
       <button id="muteBtn" class="hud-mute" aria-label="Toggle sound">🔊</button>
       <span id="speed" class="hud-speed">0 km/h</span>
     </span>
   </div>
+
+  <!-- achievements -->
+  <aside id="achPanel" class="panel ach-panel">
+    <button id="achClose" class="panel-close" aria-label="Close">✕</button>
+    <div class="panel-body">
+      <h2 class="ach-title">Achievements</h2>
+      <p id="achCount" class="ach-count">0 / 8</p>
+      <div id="achList"></div>
+    </div>
+  </aside>
+
+  <div id="achToast" class="ach-toast"></div>
 
   <div id="zoneToast" class="zone-toast"></div>
 

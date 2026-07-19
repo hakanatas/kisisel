@@ -29,7 +29,7 @@ export const ZONES = [
   { id: "contact", label: "Contact", x: 24, z: 9, r: 6.0, color: [0.47, 0.74, 0.47] },
 ];
 
-export function buildWorld(engine) {
+export function buildWorld(engine, models = {}) {
   const ground = geo();
   const props = geo();
   const sky = geo();
@@ -309,18 +309,34 @@ export function buildWorld(engine) {
     }
   }
 
-  /* Galata Tower */
+  /* Galata Tower — real model when provided (Hakan's GLB), primitives otherwise */
   const TX = -33, TZ = 26;
-  cylinder(props, 2.5, 2.2, 7.2, 12, STONE, { cx: TX, cz: TZ });
-  cylinder(props, 2.75, 2.75, 0.7, 12, [0.72, 0.68, 0.62], { cx: TX, cy: 7.2, cz: TZ });
-  cylinder(props, 2.1, 1.9, 1.3, 12, STONE, { cx: TX, cy: 7.9, cz: TZ });
-  cylinder(props, 2.35, 0, 2.6, 12, TERRA, { cx: TX, cy: 9.2, cz: TZ });
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const wgeo = geo();
-    box(wgeo, 0.4, 0.7, 0.12, [0.3, 0.32, 0.4], { cy: 7.35 });
-    transformGeo(wgeo, mat4Compose(TX + Math.cos(a) * 2.72, 0, TZ + Math.sin(a) * 2.72, -a + Math.PI / 2));
-    props.verts.push(...wgeo.verts);
+  if (models.galata) {
+    const b = models.galata.bounds;
+    const height = b.maxY - b.minY;
+    const s = 13 / height;
+    for (const n of models.galata.nodes) {
+      const v = Float32Array.from(n.verts);
+      for (let i = 0; i < v.length; i += 11) {
+        v[i] = (v[i] - (b.minX + b.maxX) / 2) * s + TX;
+        v[i + 1] = (v[i + 1] - b.minY) * s;
+        v[i + 2] = (v[i + 2] - (b.minZ + b.maxZ) / 2) * s + TZ;
+      }
+      // no spread: these arrays are big enough to overflow the call stack
+      for (let i = 0; i < v.length; i++) props.verts.push(v[i]);
+    }
+  } else {
+    cylinder(props, 2.5, 2.2, 7.2, 12, STONE, { cx: TX, cz: TZ });
+    cylinder(props, 2.75, 2.75, 0.7, 12, [0.72, 0.68, 0.62], { cx: TX, cy: 7.2, cz: TZ });
+    cylinder(props, 2.1, 1.9, 1.3, 12, STONE, { cx: TX, cy: 7.9, cz: TZ });
+    cylinder(props, 2.35, 0, 2.6, 12, TERRA, { cx: TX, cy: 9.2, cz: TZ });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const wgeo = geo();
+      box(wgeo, 0.4, 0.7, 0.12, [0.3, 0.32, 0.4], { cy: 7.35 });
+      transformGeo(wgeo, mat4Compose(TX + Math.cos(a) * 2.72, 0, TZ + Math.sin(a) * 2.72, -a + Math.PI / 2));
+      props.verts.push(...wgeo.verts);
+    }
   }
   collide(TX, TZ, 3.1);
 
@@ -536,6 +552,7 @@ export function buildWorld(engine) {
   const dynamics = [];
   const addDyn = (mesh, x, z, opts = {}) => {
     dynamics.push({
+      kind: opts.kind || "obj", id: dynamics.length, knocked: false,
       mesh, texture: opts.texture || null,
       x, y: 0, z, yaw: opts.yaw || 0, pitch: 0, roll: 0,
       vx: 0, vy: 0, vz: 0, wyaw: 0, wpitch: 0,
@@ -561,13 +578,13 @@ export function buildWorld(engine) {
   // one long line, with a word gap — like the BRUNO SIMON letters
   "HAKAN ATAS".split("").forEach((ch, i) => {
     if (ch === " ") return;
-    addDyn(letterGeoFor(ch), -9.3 + i * 2.05, -6.5, { r: 0.85, h: 2.1, mass: 1.3 });
+    addDyn(letterGeoFor(ch), -9.3 + i * 2.05, -6.5, { r: 0.85, h: 2.1, mass: 1.3, kind: "letter" });
   });
 
   const pinMesh = engine.meshFromGeo(pinGeo());
   for (let r = 0; r < 3; r++) {
     for (let i = 0; i <= r; i++) {
-      addDyn(pinMesh, 8 - r * 0.9, 23 + (i - r / 2) * 1.0, { r: 0.3, h: 0.7, mass: 0.35 });
+      addDyn(pinMesh, 8 - r * 0.9, 23 + (i - r / 2) * 1.0, { r: 0.3, h: 0.7, mass: 0.35, kind: "pin" });
     }
   }
 
