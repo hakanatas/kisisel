@@ -78,5 +78,18 @@ export function transformPoint(m, x, y, z) {
   ];
 }
 
+/* Flatten geometry onto the y=eps plane along the (normalized) light
+   direction — cheap projected shadows. */
+export function mat4ShadowY(light, eps = 0.02) {
+  const kx = light[0] / light[1];
+  const kz = light[2] / light[1];
+  return new Float32Array([
+    1, 0, 0, 0,
+    -kx, 0, -kz, 0,
+    0, 0, 1, 0,
+    0, eps, 0, 1,
+  ]);
+}
+
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));

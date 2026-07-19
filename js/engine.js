@@ -34,6 +34,7 @@ uniform float uFogDensity;
 uniform sampler2D uTex;
 uniform float uUseTex;
 uniform float uAlpha;
+uniform vec4 uOverride; // rgb + enable flag: unlit flat color (shadows, fx)
 void main() {
   vec3 base = vColor;
   vec4 texel = vec4(1.0);
@@ -41,10 +42,15 @@ void main() {
     texel = texture2D(uTex, vUV);
     base *= texel.rgb;
   }
-  vec3 n = normalize(vNormal);
-  float diff = max(dot(n, uLightDir), 0.0);
-  float hemi = n.y * 0.5 + 0.5;
-  vec3 lit = base * (0.52 + diff * 0.48) * mix(0.82, 1.06, hemi);
+  vec3 lit;
+  if (uOverride.a > 0.5) {
+    lit = uOverride.rgb;
+  } else {
+    vec3 n = normalize(vNormal);
+    float diff = max(dot(n, uLightDir), 0.0);
+    float hemi = n.y * 0.5 + 0.5;
+    lit = base * (0.52 + diff * 0.48) * mix(0.82, 1.06, hemi);
+  }
   float fog = 1.0 - exp(-vDist * vDist * uFogDensity);
   vec3 col = mix(lit, uFogColor, clamp(fog, 0.0, 1.0));
   gl_FragColor = vec4(col, uAlpha * texel.a);
@@ -54,8 +60,8 @@ void main() {
 export class Engine {
   constructor(canvas) {
     this.canvas = canvas;
-    const gl = canvas.getContext("webgl2", { antialias: true }) ||
-               canvas.getContext("webgl", { antialias: true });
+    const gl = canvas.getContext("webgl2", { antialias: true, stencil: true }) ||
+               canvas.getContext("webgl", { antialias: true, stencil: true });
     if (!gl) throw new Error("webgl-unavailable");
     this.gl = gl;
 
@@ -83,8 +89,9 @@ export class Engine {
       uv: gl.getAttribLocation(prog, "aUV"),
     };
     this.uni = {};
-    for (const n of ["uVP", "uModel", "uLightDir", "uFogColor", "uFogDensity", "uTex", "uUseTex", "uAlpha"])
+    for (const n of ["uVP", "uModel", "uLightDir", "uFogColor", "uFogDensity", "uTex", "uUseTex", "uAlpha", "uOverride"])
       this.uni[n] = gl.getUniformLocation(prog, n);
+    gl.uniform4f(this.uni.uOverride, 0, 0, 0, 0);
 
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
@@ -146,8 +153,25 @@ export class Engine {
     const gl = this.gl;
     const [r, g, b] = this.fogColor || [0.8, 0.9, 1];
     gl.clearColor(r, g, b, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.clearStencil(0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     gl.uniformMatrix4fv(this.uni.uVP, false, vp);
+  }
+
+  /* Shadow pass: everything drawn between begin/end darkens each pixel at
+     most once (stencil), so overlapping shadows do not double-darken. */
+  beginShadows() {
+    const gl = this.gl;
+    gl.enable(gl.STENCIL_TEST);
+    gl.stencilFunc(gl.EQUAL, 0, 0xff);
+    gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR);
+    gl.depthMask(false);
+  }
+
+  endShadows() {
+    const gl = this.gl;
+    gl.disable(gl.STENCIL_TEST);
+    gl.depthMask(true);
   }
 
   draw(mesh, model, opts = {}) {
@@ -155,6 +179,7 @@ export class Engine {
     gl.uniformMatrix4fv(this.uni.uModel, false, model);
     gl.uniform1f(this.uni.uUseTex, opts.texture ? 1 : 0);
     gl.uniform1f(this.uni.uAlpha, opts.alpha !== undefined ? opts.alpha : 1);
+    if (opts.override) gl.uniform4f(this.uni.uOverride, opts.override[0], opts.override[1], opts.override[2], 1);
     gl.bindTexture(gl.TEXTURE_2D, opts.texture || this.white);
     if (opts.noDepthWrite) gl.depthMask(false);
 
@@ -172,6 +197,7 @@ export class Engine {
 
     gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     if (opts.noDepthWrite) gl.depthMask(true);
+    if (opts.override) gl.uniform4f(this.uni.uOverride, 0, 0, 0, 0);
   }
 }
 

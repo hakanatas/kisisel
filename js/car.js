@@ -76,8 +76,10 @@ export class Car {
     lat -= lat * Math.min(1, grip * dt);
 
     // steering scaled by speed, flips in reverse
+    // (positive yaw turns toward -x, which reads as screen-left behind the
+    // car — so steer right must *decrease* yaw)
     const steerPow = clamp(Math.abs(fwd) / 5, 0, 1) * Math.sign(fwd || 1);
-    this.yaw += input.steer * 1.9 * steerPow * dt;
+    this.yaw -= input.steer * 1.9 * steerPow * dt;
 
     // recompose velocity (heading may have changed)
     const fx2 = Math.sin(this.yaw), fz2 = Math.cos(this.yaw);
@@ -90,8 +92,8 @@ export class Car {
 
     // cosmetics
     this.wheelSpin += fwd * dt / 0.24;
-    this.steerVisual += (input.steer * 0.45 - this.steerVisual) * Math.min(1, 12 * dt);
-    this.roll += (-input.steer * clamp(fwd / MAXF, -1, 1) * 0.055 - this.roll) * Math.min(1, 8 * dt);
+    this.steerVisual += (-input.steer * 0.45 - this.steerVisual) * Math.min(1, 12 * dt);
+    this.roll += (input.steer * clamp(fwd / MAXF, -1, 1) * 0.055 - this.roll) * Math.min(1, 8 * dt);
     this.pitch += (clamp((this.prevFwd ?? 0) - fwd, -1, 1) * 0.12 - this.pitch) * Math.min(1, 6 * dt);
     this.prevFwd = fwd;
   }

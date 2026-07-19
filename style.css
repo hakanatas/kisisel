@@ -177,6 +177,19 @@ body {
   border-radius: 999px;
 }
 
+.hud-right { display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+
+.hud-mute {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: none;
+  background: var(--paper);
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px -12px rgba(20, 30, 40, 0.4);
+}
+
 .hud-speed {
   font-family: var(--mono);
   font-size: 0.85rem;
