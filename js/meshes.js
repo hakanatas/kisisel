@@ -110,6 +110,94 @@ export function mergeInto(target, src, tx = 0, ty = 0, tz = 0, ry = 0, s = 1) {
 
 /* ---------- compound props ---------- */
 
+/* Bruno-style spiky grass tuft — one triangle per blade (no culling). */
+export function grassTuftGeo(seed, scale = 1, baseCol = [0.62, 0.66, 0.28]) {
+  const g = geo();
+  const h = (n) => { const s = Math.sin((seed + n) * 127.1) * 43758.5; return s - Math.floor(s); };
+  const blades = 4 + Math.floor(h(1) * 3);
+  for (let i = 0; i < blades; i++) {
+    const a = h(i * 3) * Math.PI * 2;
+    const r = 0.05 + h(i * 5) * 0.16;
+    const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
+    const bh = (0.22 + h(i * 7) * 0.3) * scale;
+    const w = 0.05 * scale;
+    const lean = (h(i * 11) - 0.5) * 0.25;
+    const tone = 0.85 + h(i * 13) * 0.3;
+    const col = [baseCol[0] * tone, baseCol[1] * tone, baseCol[2] * tone];
+    pushTri(g,
+      [bx - w, 0, bz], [bx + w, 0, bz],
+      [bx + lean, bh, bz + (h(i * 17) - 0.5) * 0.2],
+      col);
+  }
+  return g;
+}
+
+/* Fluffy blob tree: trunk + a cluster of tilted cubes (blossom style). */
+export function blobTreeGeo(seed, scale = 1, palette = "pink") {
+  const g = geo();
+  const h = (n) => { const s = Math.sin((seed + n) * 91.7) * 43758.5; return s - Math.floor(s); };
+  cylinder(g, 0.12 * scale, 0.09 * scale, 0.9 * scale, 5, [0.42, 0.28, 0.3]);
+  const cols = {
+    pink: [[0.95, 0.6, 0.72], [0.98, 0.7, 0.8], [0.88, 0.5, 0.68]],
+    orange: [[0.95, 0.58, 0.28], [0.98, 0.7, 0.35], [0.88, 0.48, 0.24]],
+    yellow: [[0.93, 0.78, 0.32], [0.97, 0.86, 0.42], [0.85, 0.68, 0.28]],
+    green: [[0.45, 0.65, 0.35], [0.55, 0.74, 0.4], [0.38, 0.56, 0.3]],
+  }[palette];
+  const blobs = 9 + Math.floor(h(2) * 5);
+  for (let i = 0; i < blobs; i++) {
+    const a = h(i * 3) * Math.PI * 2;
+    const rad = h(i * 5) * 0.55 * scale;
+    const bx = Math.cos(a) * rad;
+    const bz = Math.sin(a) * rad;
+    const by = (0.95 + h(i * 7) * 0.75) * scale;
+    const s = (0.3 + h(i * 11) * 0.4) * scale;
+    const b = geo();
+    box(b, s, s, s, cols[i % 3], { centered: true });
+    transformGeo(b, mat4Compose(bx, by, bz, h(i * 13) * Math.PI, h(i * 17) * 0.6, 0));
+    g.verts.push(...b.verts);
+  }
+  return g;
+}
+
+/* Cosy lantern post with a glowing head (glow drawn separately). */
+export function lanternGeo() {
+  const g = geo();
+  const wood = [0.45, 0.32, 0.34];
+  box(g, 0.14, 1.7, 0.14, wood);
+  box(g, 0.4, 0.1, 0.4, wood, { cy: 1.7 });
+  box(g, 0.3, 0.34, 0.3, [1.0, 0.8, 0.42], { cy: 1.8 });   // glass (bright)
+  box(g, 0.38, 0.08, 0.38, [0.35, 0.24, 0.26], { cy: 2.14 });
+  cylinder(g, 0.1, 0, 0.16, 4, [0.35, 0.24, 0.26], { cy: 2.22 });
+  return g;
+}
+
+/* Chunky extruded 3D letters built from voxels (BRUNO SIMON style). */
+const VOXEL_FONT = {
+  H: ["1...1", "1...1", "1...1", "11111", "1...1", "1...1", "1...1"],
+  A: [".111.", "1...1", "1...1", "11111", "1...1", "1...1", "1...1"],
+  K: ["1...1", "1..1.", "1.1..", "11...", "1.1..", "1..1.", "1...1"],
+  N: ["1...1", "11..1", "11..1", "1.1.1", "1..11", "1..11", "1...1"],
+  T: ["11111", "..1..", "..1..", "..1..", "..1..", "..1..", "..1.."],
+  S: [".1111", "1....", "1....", ".111.", "....1", "....1", "1111."],
+};
+
+export function voxelLetterGeo(ch, cell = 0.24, depth = 0.34, color = [0.97, 0.95, 0.9]) {
+  const g = geo();
+  const rows = VOXEL_FONT[ch];
+  if (!rows) return g;
+  const w = rows[0].length * cell;
+  for (let r = 0; r < rows.length; r++) {
+    for (let cix = 0; cix < rows[r].length; cix++) {
+      if (rows[r][cix] !== "1") continue;
+      box(g, cell * 1.02, cell * 1.02, depth, color, {
+        cx: cix * cell - w / 2 + cell / 2,
+        cy: (rows.length - 1 - r) * cell,
+      });
+    }
+  }
+  return g;
+}
+
 export function treeGeo(scale = 1, tone = 0) {
   const g = geo();
   const trunk = [0.45, 0.32, 0.22];
@@ -143,8 +231,8 @@ export function lampGeo() {
 
 export function benchGeo() {
   const g = geo();
-  const wood = [0.62, 0.45, 0.28];
-  const iron = [0.25, 0.26, 0.3];
+  const wood = [0.78, 0.34, 0.3];
+  const iron = [0.32, 0.22, 0.3];
   box(g, 1.4, 0.07, 0.42, wood, { cy: 0.42 });
   box(g, 1.4, 0.34, 0.06, wood, { cy: 0.52, cz: -0.2 });
   box(g, 0.08, 0.42, 0.36, iron, { cx: -0.6 });

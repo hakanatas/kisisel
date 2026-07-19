@@ -5,26 +5,45 @@ import { mat4Compose, clamp } from "./math3d.js";
 
 export function buildCarMeshes(engine) {
   const bodyG = geo();
-  const RED = [0.85, 0.24, 0.2];
-  const DARK = [0.16, 0.17, 0.2];
-  const GLASS = [0.62, 0.78, 0.86];
+  const RED = [0.82, 0.18, 0.16];
+  const RED2 = [0.6, 0.12, 0.12];
+  const DARK = [0.14, 0.13, 0.18];
+  const GLASS = [0.32, 0.3, 0.46];
 
-  box(bodyG, 1.1, 0.34, 2.05, RED, { cy: 0.24 });                 // chassis
-  box(bodyG, 1.02, 0.1, 2.1, DARK, { cy: 0.16 });                 // skirt
-  box(bodyG, 0.92, 0.42, 1.05, RED, { cy: 0.58, cz: -0.12 });     // cabin
-  box(bodyG, 0.84, 0.3, 0.95, GLASS, { cy: 0.62, cz: -0.12 });    // windows
-  box(bodyG, 0.92, 0.1, 1.15, RED, { cy: 0.9, cz: -0.12 });       // roof
-  box(bodyG, 1.0, 0.18, 0.5, RED, { cy: 0.44, cz: 0.75 });        // hood
-  box(bodyG, 0.16, 0.12, 0.06, [1, 0.9, 0.6], { cx: -0.34, cy: 0.34, cz: 1.03 }); // headlights
-  box(bodyG, 0.16, 0.12, 0.06, [1, 0.9, 0.6], { cx: 0.34, cy: 0.34, cz: 1.03 });
-  box(bodyG, 0.16, 0.1, 0.05, [0.9, 0.2, 0.15], { cx: -0.34, cy: 0.36, cz: -1.03 }); // taillights
-  box(bodyG, 0.16, 0.1, 0.05, [0.9, 0.2, 0.15], { cx: 0.34, cy: 0.36, cz: -1.03 });
-  box(bodyG, 0.5, 0.06, 0.12, [0.9, 0.88, 0.8], { cy: 0.3, cz: 1.06 });  // bumper
+  // off-road truck: high clearance, chunky arches, roof rack
+  box(bodyG, 1.16, 0.4, 2.15, RED, { cy: 0.4 });                   // main body
+  box(bodyG, 1.06, 0.14, 2.2, DARK, { cy: 0.3 });                  // skirt
+  box(bodyG, 0.98, 0.44, 1.0, RED, { cy: 0.78, cz: -0.18 });       // cabin
+  box(bodyG, 0.9, 0.3, 0.92, GLASS, { cy: 0.84, cz: -0.18 });      // windows
+  box(bodyG, 0.98, 0.1, 1.08, RED2, { cy: 1.2, cz: -0.18 });       // roof
+  box(bodyG, 1.02, 0.16, 0.62, RED2, { cy: 0.7, cz: 0.68 });       // hood
+  box(bodyG, 0.34, 0.05, 0.4, DARK, { cy: 0.79, cz: 0.66 });       // hood vent
+  // wheel arches
+  for (const az of [0.72, -0.72]) {
+    for (const ax of [-0.62, 0.62]) {
+      box(bodyG, 0.24, 0.12, 0.78, DARK, { cx: ax, cy: 0.56, cz: az });
+    }
+  }
+  // roof rack + light bar
+  for (const [rx, rz] of [[-0.42, 0.28], [0.42, 0.28], [-0.42, -0.62], [0.42, -0.62]]) {
+    box(bodyG, 0.07, 0.16, 0.07, DARK, { cx: rx, cy: 1.25, cz: rz - 0.18 + 0.18 });
+  }
+  box(bodyG, 0.98, 0.07, 1.0, DARK, { cy: 1.4, cz: -0.16 });
+  for (let i = 0; i < 4; i++) {
+    box(bodyG, 0.14, 0.1, 0.12, [1, 0.85, 0.4], { cx: -0.33 + i * 0.22, cy: 1.46, cz: 0.3 });
+  }
+  box(bodyG, 0.2, 0.12, 0.08, [1, 0.88, 0.5], { cx: -0.36, cy: 0.62, cz: 1.1 });  // headlights
+  box(bodyG, 0.2, 0.12, 0.08, [1, 0.88, 0.5], { cx: 0.36, cy: 0.62, cz: 1.1 });
+  box(bodyG, 0.2, 0.1, 0.06, [0.95, 0.2, 0.18], { cx: -0.36, cy: 0.62, cz: -1.1 }); // taillights
+  box(bodyG, 0.2, 0.1, 0.06, [0.95, 0.2, 0.18], { cx: 0.36, cy: 0.62, cz: -1.1 });
+  box(bodyG, 0.9, 0.1, 0.14, [0.55, 0.52, 0.58], { cy: 0.42, cz: 1.12 });  // bumpers
+  box(bodyG, 0.9, 0.1, 0.12, [0.55, 0.52, 0.58], { cy: 0.42, cz: -1.12 });
 
   const wheelG = geo();
   const wl = geo();
-  cylinder(wl, 0.24, 0.24, 0.18, 10, DARK, { cap: true });
-  cylinder(wl, 0.12, 0.12, 0.19, 8, [0.75, 0.75, 0.78], { cy: -0.005 });
+  cylinder(wl, 0.3, 0.3, 0.24, 10, DARK, { cap: true });
+  cylinder(wl, 0.15, 0.15, 0.25, 8, [0.72, 0.2, 0.18], { cy: -0.005 });
+  cylinder(wl, 0.06, 0.06, 0.26, 6, [0.85, 0.82, 0.8], { cy: -0.01 });
   transformGeo(wl, mat4Compose(0, 0, 0, 0, 0, Math.PI / 2));
   wheelG.verts.push(...wl.verts);
 
@@ -103,8 +122,8 @@ export class Car {
     const m = [];
     const body = mat4Compose(this.x, 0.06 + 0, this.z, this.yaw, this.pitch, this.roll);
     const wheelPos = [
-      [-0.52, 0.24, 0.68, true], [0.52, 0.24, 0.68, true],   // front
-      [-0.52, 0.24, -0.68, false], [0.52, 0.24, -0.68, false], // rear
+      [-0.58, 0.3, 0.72, true], [0.58, 0.3, 0.72, true],   // front
+      [-0.58, 0.3, -0.72, false], [0.58, 0.3, -0.72, false], // rear
     ];
     const wheels = wheelPos.map(([wx, wy, wz, front]) => {
       const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);

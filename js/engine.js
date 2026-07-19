@@ -50,8 +50,10 @@ void main() {
     vec3 n = normalize(vNormal);
     float diff = max(dot(n, uLightDir), 0.0);
     float hemi = n.y * 0.5 + 0.5;
-    vec3 sun = vec3(1.05, 1.0, 0.9); // warm key light
-    lit = base * (vec3(0.52, 0.53, 0.56) + diff * 0.48 * sun) * mix(0.82, 1.06, hemi);
+    // sunset grading: warm low sun, cool purple ambient in the shade
+    vec3 sun = vec3(1.18, 1.0, 0.78);
+    vec3 ambient = vec3(0.5, 0.45, 0.62);
+    lit = base * (ambient + diff * 0.55 * sun) * mix(0.85, 1.08, hemi);
   }
   float dist = distance(vWorld, uEye);
   float fog = 1.0 - exp(-dist * dist * uFogDensity);
@@ -101,7 +103,7 @@ export class Engine {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
-    const dir = [0.5, 0.82, 0.28];
+    const dir = [0.72, 0.5, 0.3]; // low sun → long shadows
     const l = Math.hypot(...dir);
     gl.uniform3f(this.uni.uLightDir, dir[0] / l, dir[1] / l, dir[2] / l);
     gl.uniform1f(this.uni.uAlpha, 1);
@@ -257,6 +259,7 @@ export class Engine {
     gl.uniform1f(this.uni.uAlpha, opts.alpha !== undefined ? opts.alpha : 1);
     if (opts.override) gl.uniform4f(this.uni.uOverride, opts.override[0], opts.override[1], opts.override[2], 1);
     gl.bindTexture(gl.TEXTURE_2D, opts.texture || this.white);
+    if (opts.additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     if (opts.noDepthWrite) gl.depthMask(false);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
@@ -273,6 +276,7 @@ export class Engine {
 
     gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
     if (opts.noDepthWrite) gl.depthMask(true);
+    if (opts.additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     if (opts.override) gl.uniform4f(this.uni.uOverride, 0, 0, 0, 0);
   }
 }

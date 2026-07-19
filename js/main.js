@@ -17,11 +17,11 @@ try {
   throw e;
 }
 
-engine.setFog([0.8, 0.88, 0.93], 0.00004);
+engine.setFog([0.92, 0.72, 0.68], 0.00004);
 
-const LIGHT = [0.5, 0.82, 0.28];
+const LIGHT = [0.72, 0.5, 0.3]; // must match engine's sun
 const shadowMat = mat4ShadowY(LIGHT, 0.02);
-const SHADOW = { override: [0.16, 0.17, 0.22], alpha: 0.38 };
+const SHADOW = { override: [0.2, 0.13, 0.38], alpha: 0.48 }; // purple dusk shadows
 
 const world = buildWorld(engine);
 if (params.has("tex")) {
@@ -38,6 +38,42 @@ const cubeG = geo(); box(cubeG, 1, 1, 1, [1, 1, 1], { centered: true });
 const cubeMesh = engine.meshFromGeo(cubeG);
 const quadG = geo(); box(quadG, 0.16, 0.012, 0.55, [0.2, 0.21, 0.24], { centered: true });
 const quadMesh = engine.meshFromGeo(quadG);
+
+/* soft radial glow sprite for lanterns & headlights */
+const glowCnv = document.createElement("canvas");
+glowCnv.width = glowCnv.height = 64;
+{
+  const gcx = glowCnv.getContext("2d");
+  const gr = gcx.createRadialGradient(32, 32, 2, 32, 32, 31);
+  gr.addColorStop(0, "rgba(255,255,255,0.9)");
+  gr.addColorStop(0.4, "rgba(255,255,255,0.32)");
+  gr.addColorStop(1, "rgba(255,255,255,0)");
+  gcx.fillStyle = gr;
+  gcx.fillRect(0, 0, 64, 64);
+}
+const glowTexture = engine.textureFromCanvas(glowCnv);
+const glowG = geo();
+// centered camera-facing quad
+{
+  const x = 0.5;
+  const e = 0;
+  glowG.verts.push(
+    -x, -x, e, 0, 0, 1, 1, 1, 1, 0, 0,
+    x, -x, e, 0, 0, 1, 1, 1, 1, 1, 0,
+    x, x, e, 0, 0, 1, 1, 1, 1, 1, 1,
+    -x, -x, e, 0, 0, 1, 1, 1, 1, 0, 0,
+    x, x, e, 0, 0, 1, 1, 1, 1, 1, 1,
+    -x, x, e, 0, 0, 1, 1, 1, 1, 0, 1,
+  );
+}
+const glowMesh = engine.meshFromGeo(glowG);
+
+function drawGlow(x, y, z, r, color, alpha = 0.55) {
+  const yaw = Math.atan2(cam.x - x, cam.z - z);
+  engine.draw(glowMesh, mat4Compose(x, y, z, yaw, 0, 0, r), {
+    texture: glowTexture, override: color, alpha, additive: true, noDepthWrite: true,
+  });
+}
 
 /* debug: ?car=x,z,deg places the car for screenshots */
 if (params.get("car")) {
@@ -366,8 +402,8 @@ function frame(now) {
   /* debug: ?only=N caps the draw stages for bisecting visual artifacts */
   const only = parseInt(params.get("only") || "99", 10);
 
-  /* 0 — sky gradient behind everything */
-  engine.drawSky([0.55, 0.75, 0.92], [0.87, 0.9, 0.9]);
+  /* 0 — sunset sky gradient behind everything */
+  engine.drawSky([0.45, 0.5, 0.86], [0.99, 0.76, 0.62]);
 
   /* 1 — painted ground */
   engine.draw(world.groundMesh, mat4Compose(0, 0, 0), { texture: world.groundTexture });
@@ -422,6 +458,21 @@ function frame(now) {
   /* car */
   engine.draw(carMeshes.body, cm.body);
   for (const w of cm.wheels) engine.draw(carMeshes.wheel, w);
+
+  /* glows: lanterns + headlights + taillights */
+  for (const g of world.glowPts) drawGlow(g.x, g.y, g.z, g.r, g.color, 0.5);
+  {
+    const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
+    const rxv = fz, rzv = -fx;
+    for (const side of [-0.36, 0.36]) {
+      drawGlow(car.x + fx * 1.12 + rxv * side, 0.62, car.z + fz * 1.12 + rzv * side, 0.55, [1, 0.85, 0.5], 0.5);
+    }
+    if (input.brake) {
+      for (const side of [-0.36, 0.36]) {
+        drawGlow(car.x - fx * 1.12 + rxv * side, 0.62, car.z - fz * 1.12 + rzv * side, 0.45, [1, 0.25, 0.2], 0.5);
+      }
+    }
+  }
 
   /* particles */
   for (const p of particles) {
