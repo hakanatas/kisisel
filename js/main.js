@@ -17,13 +17,18 @@ try {
   throw e;
 }
 
-engine.setFog([0.8, 0.88, 0.93], 0.000012);
+engine.setFog([0.8, 0.88, 0.93], 0.00004);
 
 const LIGHT = [0.5, 0.82, 0.28];
 const shadowMat = mat4ShadowY(LIGHT, 0.02);
-const SHADOW = { override: [0.12, 0.13, 0.17], alpha: 0.45 };
+const SHADOW = { override: [0.16, 0.17, 0.22], alpha: 0.38 };
 
 const world = buildWorld(engine);
+if (params.has("tex")) {
+  const dc = world.debugCanvas;
+  dc.style.cssText = "position:fixed;inset:0;width:100vw;height:auto;z-index:99;background:#fff";
+  document.body.appendChild(dc);
+}
 const carMeshes = buildCarMeshes(engine);
 const car = new Car();
 const audio = new AudioSys();
@@ -357,32 +362,41 @@ function frame(now) {
   const view = mat4LookAt([cam.x, cam.y, cam.z], [cam.tx, cam.ty, cam.tz], [0, 1, 0]);
   const vp = mat4Multiply(proj, view);
 
-  engine.begin(vp);
+  engine.begin(vp, [cam.x, cam.y, cam.z]);
+  /* debug: ?only=N caps the draw stages for bisecting visual artifacts */
+  const only = parseInt(params.get("only") || "99", 10);
 
-  /* 1 — flat ground */
-  engine.draw(world.groundMesh, mat4Compose(0, 0, 0));
+  /* 0 — sky gradient behind everything */
+  engine.drawSky([0.55, 0.75, 0.92], [0.87, 0.9, 0.9]);
+
+  /* 1 — painted ground */
+  engine.draw(world.groundMesh, mat4Compose(0, 0, 0), { texture: world.groundTexture });
 
   /* 2 — skid marks */
   for (const s of skids) {
     engine.draw(quadMesh, mat4Compose(s.x, 0.018, s.z, s.yaw, 0, 0, 1), { alpha: 0.3, noDepthWrite: true, override: [0.2, 0.21, 0.24] });
   }
 
+  const cm = car.matrices();
+
   /* 3 — projected shadows (each pixel darkened once via stencil) */
+  if (!params.has("nosh")) {
   engine.beginShadows();
   engine.draw(world.propsMesh, shadowMat, SHADOW);
   for (const s of world.signs) engine.draw(s.mesh, mat4Multiply(shadowMat, s.model), SHADOW);
   for (const d of world.dynamics) {
     engine.draw(d.mesh, mat4Multiply(shadowMat, mat4Compose(d.x, d.y, d.z, d.yaw, d.pitch, d.roll, d.scale)), SHADOW);
   }
-  const cm = car.matrices();
   engine.draw(carMeshes.body, mat4Multiply(shadowMat, cm.body), SHADOW);
   engine.draw(world.tram.mesh, mat4Multiply(shadowMat, mat4Compose(world.tram.x, 0, world.tram.z)), SHADOW);
   engine.endShadows();
+  }
 
   /* 4 — solid world */
-  engine.draw(world.propsMesh, mat4Compose(0, 0, 0));
-  engine.draw(world.skyMesh, mat4Compose(0, 0, 0));
-  for (const s of world.signs) engine.draw(s.mesh, s.model, { texture: s.texture });
+  if (only >= 2) engine.draw(world.propsMesh, mat4Compose(0, 0, 0));
+  if (only >= 3) engine.draw(world.skyMesh, mat4Compose(0, 0, 0));
+  if (only >= 4) for (const s of world.signs) engine.draw(s.mesh, s.model, { texture: s.texture });
+  if (only < 5) { requestAnimationFrame(frame); return; }
 
   /* flag with a gentle flutter */
   engine.draw(world.flag.mesh,
@@ -416,6 +430,9 @@ function frame(now) {
       override: p.color, alpha: 0.85 * (1 - t01), noDepthWrite: true,
     });
   }
+
+  /* final touch — vignette */
+  engine.drawVignette();
 
   if (speedEl) speedEl.textContent = Math.round(Math.abs(car.speed) * 4.5) + " km/h";
 

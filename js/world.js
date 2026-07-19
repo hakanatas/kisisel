@@ -6,7 +6,7 @@
    Plus: textured signs, knockable dynamics, colliders, zones, ferry,
    tram and the flag. */
 
-import { geo, box, cylinder, disc, groundRect, billboardQuad, transformGeo, mergeInto, treeGeo, pineGeo, lampGeo, benchGeo, pinGeo, coneGeo } from "./meshes.js";
+import { geo, box, cylinder, pushQuad, billboardQuad, transformGeo, mergeInto, treeGeo, pineGeo, lampGeo, benchGeo, pinGeo, coneGeo } from "./meshes.js";
 import { mat4Compose } from "./math3d.js";
 import { textCanvas } from "./engine.js";
 
@@ -36,84 +36,202 @@ export function buildWorld(engine) {
   const colliders = [];
   const collide = (x, z, r) => colliders.push({ x, z, r });
 
-  /* ================= GROUND ================= */
-  groundRect(ground, -52, -44, 34, 44, 0, SAND);
-  groundRect(ground, 34, -44, 78, 44, -0.04, WATER);
-  const patches = [[-30, -24, 14], [-30, 22, 13], [18, -24, 12], [8, 26, 10], [-6, -30, 8]];
-  for (const [px, pz, pr] of patches) disc(ground, pr, 12, [0.62, 0.74, 0.5], { cx: px, cy: 0.012, cz: pz });
+  /* ================= GROUND — one big painted texture =================
+     Everything flat (terrain, water, roads, markings, zone discs) is
+     painted on a canvas: soft edges, gradients and grain instead of
+     hard polygon boundaries. */
+  const GX0 = -52, GX1 = 98, GZ0 = -44, GZ1 = 44;
+  const GW = 2048, GH = 1200;
+  const gc = document.createElement("canvas");
+  gc.width = GW; gc.height = GH;
+  const c = gc.getContext("2d");
+  c.setTransform(GW / (GX1 - GX0), 0, 0, GH / (GZ1 - GZ0), (-GX0 * GW) / (GX1 - GX0), (-GZ0 * GH) / (GZ1 - GZ0));
+  c.lineJoin = "round";
 
-  /* roads with curbs */
-  const roadRect = (x0, z0, x1, z1) => {
-    groundRect(ground, x0, z0, x1, z1, 0.02, ROAD);
-    if (x1 - x0 > z1 - z0) { // horizontal
-      groundRect(ground, x0, z0 - 0.22, x1, z0, 0.022, CURB);
-      groundRect(ground, x0, z1, x1, z1 + 0.22, 0.022, CURB);
-    } else {
-      groundRect(ground, x0 - 0.22, z0, x0, z1, 0.022, CURB);
-      groundRect(ground, x1, z0, x1 + 0.22, z1, 0.022, CURB);
+  // warm sand base + light pool in the middle
+  c.fillStyle = "#e3d7b8";
+  c.fillRect(GX0, GZ0, GX1 - GX0, GZ1 - GZ0);
+  let rg = c.createRadialGradient(-2, 0, 4, -2, 0, 58);
+  rg.addColorStop(0, "rgba(255,248,224,0.55)");
+  rg.addColorStop(1, "rgba(255,248,224,0)");
+  c.fillStyle = rg;
+  c.fillRect(GX0, GZ0, GX1 - GX0, GZ1 - GZ0);
+
+  // water with a soft shore, deeper toward the horizon
+  const wg = c.createLinearGradient(33, 0, 78, 0);
+  wg.addColorStop(0, "#e3d7b8");
+  wg.addColorStop(0.045, "#bcd2c2");
+  wg.addColorStop(0.09, "#54a0b0");
+  wg.addColorStop(0.7, "#417f95");
+  wg.addColorStop(1, "#3c7085");
+  c.fillStyle = wg;
+  c.fillRect(33, GZ0, 74 - 33, GZ1 - GZ0);
+  // far shore
+  c.fillStyle = "#d8ccb0";
+  c.fillRect(74, GZ0, GX1 - 74, GZ1 - GZ0);
+  // waves: soft white strokes
+  c.strokeStyle = "rgba(240,250,250,0.5)";
+  c.lineCap = "round";
+  for (let i = 0; i < 34; i++) {
+    const wx = 37 + ((i * 37) % 34);
+    const wz = -41 + ((i * 61) % 82);
+    c.lineWidth = 0.16 + (i % 3) * 0.05;
+    c.beginPath();
+    c.moveTo(wx, wz);
+    c.quadraticCurveTo(wx + 0.9, wz - 0.25, wx + 1.8, wz);
+    c.stroke();
+  }
+
+  // grass patches: layered soft blobs
+  const patches = [[-30, -24, 14], [-30, 22, 13], [18, -24, 12], [8, 26, 10], [-6, -30, 8]];
+  for (const [px, pz, pr] of patches) {
+    for (const [rr, col] of [[pr, "rgba(128,164,96,0.55)"], [pr * 0.7, "rgba(120,160,88,0.5)"], [pr * 0.45, "rgba(136,172,100,0.5)"]]) {
+      const gg2 = c.createRadialGradient(px, pz, rr * 0.2, px, pz, rr);
+      gg2.addColorStop(0, col);
+      gg2.addColorStop(1, "rgba(128,164,96,0)");
+      c.fillStyle = gg2;
+      c.fillRect(px - rr, pz - rr, rr * 2, rr * 2);
     }
+  }
+
+  // pads
+  const pad = (px, pz, pr, col) => {
+    const pg = c.createRadialGradient(px, pz, pr * 0.5, px, pz, pr);
+    pg.addColorStop(0, col);
+    pg.addColorStop(0.85, col);
+    pg.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = pg;
+    c.fillRect(px - pr, pz - pr, pr * 2, pr * 2);
   };
-  roadRect(-40, -1.6, 32, 1.6);
-  roadRect(-1.6, -32, 1.6, 32);
-  roadRect(-27.6, -22, -24.4, -1);
-  roadRect(-27.6, 1, -24.4, 22);
-  roadRect(13.4, -24, 16.6, -1);
-  roadRect(1, 7.4, 24, 10.6);
-  for (let x = -38; x < 32; x += 4) {
-    if (x > -4 && x < 3) continue; // keep the junction clean
-    groundRect(ground, x, -0.12, x + 1.7, 0.12, 0.03, LINE);
+  pad(8, 24, 4.8, "rgba(210,200,175,0.9)");
+  pad(-33, 26, 4.4, "rgba(182,172,152,0.95)");
+  pad(47, 20, 2.8, "rgba(207,197,178,1)"); // Kız Kulesi islet
+
+  // roads: curb stroke under asphalt stroke → soft edges
+  const roads = [
+    [[-40, 0], [32, 0]],
+    [[0, -32], [0, 32]],
+    [[-26, -22], [-26, 22]],
+    [[15, -24], [15, -1]],
+    [[1, 9], [24, 9]],
+  ];
+  c.lineCap = "round";
+  for (const [[ax, az], [bx, bz]] of roads) {
+    c.strokeStyle = "#c6bda4";
+    c.lineWidth = 3.9;
+    c.beginPath(); c.moveTo(ax, az); c.lineTo(bx, bz); c.stroke();
   }
-  for (let z = -30; z < 32; z += 4) {
-    if (z > -4 && z < 3) continue;
-    groundRect(ground, -0.12, z, 0.12, z + 1.7, 0.03, LINE);
+  for (const [[ax, az], [bx, bz]] of roads) {
+    c.strokeStyle = "#7c8089";
+    c.lineWidth = 3.3;
+    c.beginPath(); c.moveTo(ax, az); c.lineTo(bx, bz); c.stroke();
   }
-  /* crosswalks around the main junction */
+  // subtle asphalt center darkening
+  for (const [[ax, az], [bx, bz]] of roads) {
+    c.strokeStyle = "rgba(50,54,62,0.1)";
+    c.lineWidth = 2.2;
+    c.beginPath(); c.moveTo(ax, az); c.lineTo(bx, bz); c.stroke();
+  }
+  // tram rails on the east-west road
+  c.strokeStyle = "rgba(52,54,62,0.85)";
+  c.lineWidth = 0.13;
+  for (const off of [-0.68, 0.68]) {
+    c.beginPath(); c.moveTo(-40, off); c.lineTo(32, off); c.stroke();
+  }
+  // dashes
+  c.strokeStyle = "rgba(240,232,212,0.85)";
+  c.lineWidth = 0.24;
+  c.setLineDash([1.7, 2.5]);
+  for (const [[ax, az], [bx, bz]] of roads) {
+    c.beginPath(); c.moveTo(ax, az); c.lineTo(bx, bz); c.stroke();
+  }
+  c.setLineDash([]);
+  // crosswalks at the main junction
+  c.fillStyle = "rgba(240,232,212,0.9)";
   for (let i = 0; i < 5; i++) {
     const o = -1.3 + i * 0.6;
-    groundRect(ground, o, -3.1, o + 0.34, -2.0, 0.03, LINE);
-    groundRect(ground, o, 2.0, o + 0.34, 3.1, 0.03, LINE);
-    groundRect(ground, -3.1, o, -2.0, o + 0.34, 0.03, LINE);
-    groundRect(ground, 2.0, o, 3.1, o + 0.34, 0.03, LINE);
+    c.fillRect(o, -3.1, 0.34, 1.1);
+    c.fillRect(o, 2.0, 0.34, 1.1);
+    c.fillRect(-3.1, o, 1.1, 0.34);
+    c.fillRect(2.0, o, 1.1, 0.34);
   }
 
-  /* tram rails along the east-west road */
-  groundRect(ground, -40, -0.75, 32, -0.61, 0.032, [0.35, 0.36, 0.4]);
-  groundRect(ground, -40, 0.61, 32, 0.75, 0.032, [0.35, 0.36, 0.4]);
-
-  /* zone discs */
+  // zone discs: soft colored glow + ring
   for (const z of ZONES) {
-    disc(ground, z.r, 20, z.color.map((c) => c * 0.55 + 0.4), { cx: z.x, cy: 0.028, cz: z.z });
-    disc(ground, z.r - 0.7, 20, z.color.map((c) => c * 0.4 + 0.55), { cx: z.x, cy: 0.034, cz: z.z });
+    const col = z.color.map((v) => Math.round(v * 255));
+    const zg = c.createRadialGradient(z.x, z.z, 1, z.x, z.z, z.r);
+    zg.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},0.55)`);
+    zg.addColorStop(0.75, `rgba(${col[0]},${col[1]},${col[2]},0.35)`);
+    zg.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0)`);
+    c.fillStyle = zg;
+    c.fillRect(z.x - z.r, z.z - z.r, z.r * 2, z.r * 2);
+    c.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},0.8)`;
+    c.lineWidth = 0.28;
+    c.beginPath(); c.arc(z.x, z.z, z.r - 0.4, 0, Math.PI * 2); c.stroke();
   }
-  disc(ground, 4.5, 14, [0.82, 0.78, 0.7], { cx: 8, cy: 0.02, cz: 24 });   // bowling pad
-  disc(ground, 4.2, 14, [0.7, 0.67, 0.62], { cx: -33, cy: 0.022, cz: 26 }); // tower plaza
 
-  /* flowers on the grass */
+  // pier planks
+  c.fillStyle = "#8a6a44";
+  c.fillRect(PIER.minX, PIER.minZ, PIER.maxX - PIER.minX, PIER.maxZ - PIER.minZ);
+  c.strokeStyle = "rgba(70,52,32,0.6)";
+  c.lineWidth = 0.1;
+  for (let x = PIER.minX + 0.8; x < PIER.maxX; x += 0.8) {
+    c.beginPath(); c.moveTo(x, PIER.minZ); c.lineTo(x, PIER.maxZ); c.stroke();
+  }
+
+  // painted hints & flourishes
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillStyle = "rgba(120,104,72,0.5)";
+  c.font = "700 1.6px 'DejaVu Sans', Arial, sans-serif";
+  c.fillText("EXPLORE MY WORLD", 0, -16.5);
+  c.fillStyle = "rgba(120,104,72,0.4)";
+  c.font = "700 1.1px 'DejaVu Sans', Arial, sans-serif";
+  c.fillText("→ PROJECTS", -20, 5.2);
+  c.fillText("ABOUT ←", -19.5, -5);
+  c.fillText("EXPERIENCE →", 9, -13);
+  c.fillText("CONTACT →", 12, 6);
+  c.save();
+  c.translate(12, 22);
+  c.rotate(-0.12);
+  c.fillStyle = "rgba(140,120,84,0.16)";
+  c.font = "800 6.5px 'DejaVu Sans', Arial, sans-serif";
+  c.fillText("İSTANBUL", 0, 0);
+  c.restore();
+
+  // grain + edge vignette
   const hash = (n) => { const s = Math.sin(n * 91.7) * 43758.5; return s - Math.floor(s); };
+  for (let i = 0; i < 2600; i++) {
+    const nx = GX0 + hash(i * 3 + 1) * (GX1 - GX0);
+    const nz = GZ0 + hash(i * 7 + 2) * (GZ1 - GZ0);
+    c.fillStyle = hash(i) > 0.5 ? "rgba(60,50,30,0.05)" : "rgba(255,250,235,0.06)";
+    const sz = 0.08 + hash(i * 13) * 0.18;
+    c.fillRect(nx, nz, sz, sz);
+  }
+  const edge = c.createRadialGradient(0, 0, 40, 0, 0, 95);
+  edge.addColorStop(0, "rgba(58,48,36,0)");
+  edge.addColorStop(1, "rgba(58,48,36,0.22)");
+  c.fillStyle = edge;
+  c.fillRect(GX0, GZ0, GX1 - GX0, GZ1 - GZ0);
+
+  // the single ground quad (v flipped to match UNPACK_FLIP_Y)
+  pushQuad(ground,
+    [GX0, 0, GZ0], [GX0, 0, GZ1], [GX1, 0, GZ1], [GX1, 0, GZ0],
+    [1, 1, 1], [[0, 1], [0, 0], [1, 0], [1, 1]]);
+  const groundTexture = engine.textureFromCanvas(gc, 0, !new URLSearchParams(location.search).has("nomip"));
+
+  /* flowers stay 3D so they cast tiny shadows */
   const flowerCols = [[0.95, 0.45, 0.5], [0.98, 0.8, 0.3], [0.85, 0.55, 0.9], [0.98, 0.95, 0.9]];
   patches.forEach(([px, pz, pr], pi) => {
     for (let i = 0; i < 10; i++) {
       const a = hash(pi * 31 + i) * Math.PI * 2;
       const rr = Math.sqrt(hash(pi * 57 + i * 3)) * (pr - 1.5);
       const fx = px + Math.cos(a) * rr, fz = pz + Math.sin(a) * rr;
-      const c = flowerCols[(pi + i) % flowerCols.length];
-      box(ground, 0.1, 0.16, 0.1, c, { cx: fx, cz: fz });
-      box(ground, 0.05, 0.1, 0.05, [0.3, 0.55, 0.3], { cx: fx + 0.06, cy: 0, cz: fz + 0.06 });
+      const fcol = flowerCols[(pi + i) % flowerCols.length];
+      box(props, 0.1, 0.16, 0.1, fcol, { cx: fx, cz: fz });
+      box(props, 0.05, 0.1, 0.05, [0.3, 0.55, 0.3], { cx: fx + 0.06, cy: 0, cz: fz + 0.06 });
     }
   });
-
-  /* pier deck */
-  groundRect(ground, PIER.minX, PIER.minZ, PIER.maxX, PIER.maxZ, 0.06, [0.58, 0.44, 0.28]);
-  for (let x = PIER.minX + 1; x < PIER.maxX; x += 2) {
-    groundRect(ground, x, PIER.minZ, x + 0.12, PIER.maxZ, 0.075, [0.5, 0.37, 0.23]);
-  }
-
-  /* waves */
-  for (let i = 0; i < 22; i++) {
-    const wx = 36 + ((i * 37) % 38);
-    const wz = -40 + ((i * 61) % 80);
-    groundRect(ground, wx, wz, wx + 1.6, wz + 0.18, -0.02, [0.85, 0.93, 0.95]);
-  }
 
   /* ================= PROPS (shadow casters) ================= */
   const post = (x, z) => { box(props, 0.18, 0.9, 0.18, WOOD, { cx: x, cz: z }); };
@@ -228,7 +346,6 @@ export function buildWorld(engine) {
 
   /* Kız Kulesi */
   const KX = 47, KZ = 20;
-  disc(ground, 2.6, 10, [0.8, 0.77, 0.7], { cx: KX, cy: 0.05, cz: KZ });
   cylinder(props, 1.0, 0.9, 2.8, 10, [0.93, 0.91, 0.86], { cx: KX, cz: KZ });
   cylinder(props, 1.15, 1.15, 0.35, 10, [0.85, 0.82, 0.76], { cx: KX, cy: 2.8, cz: KZ });
   cylinder(props, 0.55, 0.5, 1.1, 8, [0.93, 0.91, 0.86], { cx: KX, cy: 3.15, cz: KZ });
@@ -268,15 +385,24 @@ export function buildWorld(engine) {
   cloud(-20, 15, -30, 1.6); cloud(15, 18, 25, 2.0); cloud(40, 16, 0, 1.7);
   cloud(-38, 17, 15, 1.4); cloud(60, 19, -14, 2.2); cloud(8, 21, -6, 1.2);
 
-  /* far shore skyline across the water */
-  groundRect(sky, 74, -44, 96, 44, 0.1, [0.8, 0.78, 0.7]);
-  const farB = (z, w, h, c) => box(sky, w, h, 3, c, { cx: 77 + (z % 3), cy: 0.1, cz: z });
+  /* far shore skyline across the water (land itself is painted) */
+  const farB = (z, w, h, c2) => box(sky, w, h, 3, c2, { cx: 77 + (z % 3), cz: z });
   farB(-30, 4, 3.4, [0.72, 0.7, 0.68]); farB(-22, 3, 5, [0.68, 0.66, 0.66]);
   farB(-13, 5, 2.6, [0.75, 0.7, 0.64]); farB(-4, 3, 4.2, [0.7, 0.68, 0.7]);
   farB(5, 4, 3, [0.74, 0.7, 0.62]); farB(14, 3, 5.5, [0.66, 0.66, 0.68]);
   farB(24, 5, 2.8, [0.76, 0.72, 0.66]); farB(33, 3, 4, [0.7, 0.66, 0.62]);
-  cylinder(sky, 0.9, 0.8, 6, 8, [0.72, 0.7, 0.66], { cx: 77, cy: 0.1, cz: -37 });
-  cylinder(sky, 1.1, 0, 1.8, 8, [0.5, 0.42, 0.4], { cx: 77, cy: 6.1, cz: -37 });
+  cylinder(sky, 0.9, 0.8, 6, 8, [0.72, 0.7, 0.66], { cx: 77, cz: -37 });
+  cylinder(sky, 1.1, 0, 1.8, 8, [0.5, 0.42, 0.4], { cx: 77, cy: 6, cz: -37 });
+
+  /* baked vertical ambient occlusion: props darken toward the ground */
+  const applyAO = (g, maxH) => {
+    const v = g.verts;
+    for (let i = 0; i < v.length; i += 11) {
+      const f = 0.7 + 0.3 * Math.min(1, Math.max(0, v[i + 1] / maxH));
+      v[i + 6] *= f; v[i + 7] *= f; v[i + 8] *= f;
+    }
+  };
+  applyAO(props, 2.4);
 
   const groundMesh = engine.meshFromGeo(ground);
   const propsMesh = engine.meshFromGeo(props);
@@ -421,5 +547,5 @@ export function buildWorld(engine) {
   box(gg, 0.1, 0.06, 0.06, [0.95, 0.7, 0.2], { cx: 0.2, cy: 0, centered: true });
   const gullMesh = engine.meshFromGeo(gg);
 
-  return { groundMesh, propsMesh, skyMesh, signs, flag, dynamics, colliders, ferry, tram, gullMesh };
+  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flag, dynamics, colliders, ferry, tram, gullMesh, debugCanvas: gc };
 }
