@@ -441,6 +441,39 @@ export function buildWorld(engine, models = {}) {
   props.verts.push(...cart.verts);
   collide(21, 13.5, 1.2);
 
+  /* yalı — Bosphorus waterfront house on stilts */
+  {
+    const yali = geo();
+    const WALL = [0.93, 0.88, 0.78];
+    const TRIM = [0.62, 0.3, 0.26];
+    const ROOF = [0.72, 0.28, 0.22];
+    const WIN = [0.32, 0.3, 0.46];
+    // stilts over the water
+    for (const [sx, sz] of [[-1.9, -1.1], [1.9, -1.1], [-1.9, 1.1], [1.9, 1.1], [0, 0]]) {
+      cylinder(yali, 0.16, 0.13, 1.0, 6, [0.42, 0.3, 0.24], { cx: sx, cy: -0.6, cz: sz });
+    }
+    box(yali, 4.6, 0.18, 3.0, [0.55, 0.4, 0.28], { cy: 0.32 });          // deck
+    box(yali, 4.0, 1.5, 2.4, WALL, { cy: 0.5 });                         // ground floor
+    box(yali, 4.4, 1.4, 2.6, WALL, { cy: 2.0 });                         // upper floor (overhang)
+    box(yali, 1.5, 1.1, 0.5, WALL, { cy: 2.15, cz: 1.5 });               // cumba bay window
+    box(yali, 1.1, 0.7, 0.1, WIN, { cy: 2.35, cz: 1.78 });
+    // window rows
+    for (const wx of [-1.5, -0.5, 0.5, 1.5]) {
+      box(yali, 0.6, 0.8, 0.08, WIN, { cx: wx, cy: 0.85, cz: 1.22 });
+      box(yali, 0.6, 0.8, 0.08, WIN, { cx: wx, cy: 2.25, cz: 1.32 });
+    }
+    box(yali, 0.7, 1.1, 0.08, TRIM, { cx: 0, cy: 0.5, cz: 1.23 });       // door
+    // trim + roof
+    box(yali, 4.5, 0.14, 2.7, TRIM, { cy: 1.55 });
+    box(yali, 4.7, 0.14, 2.9, TRIM, { cy: 3.4 });
+    cylinder(yali, 2.9, 0, 1.3, 4, ROOF, { cy: 3.54 });
+    box(yali, 0.4, 0.7, 0.4, [0.8, 0.75, 0.68], { cx: 1.4, cy: 3.9 });   // chimney
+    transformGeo(yali, mat4Compose(37.5, 0.6, -8, -Math.PI / 2 - 0.15));
+    props.verts.push(...yali.verts);
+    collide(37.5, -8, 3.2);
+    glowPts.push({ x: 36.4, y: 2.6, z: -8, r: 1.3, color: [1, 0.75, 0.35] });
+  }
+
   /* Kız Kulesi */
   const KX = 47, KZ = 20;
   cylinder(props, 1.0, 0.9, 2.8, 10, [0.93, 0.91, 0.86], { cx: KX, cz: KZ });
