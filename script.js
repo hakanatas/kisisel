@@ -1,4 +1,5 @@
-// Theme: default dark, follow saved preference, persist toggle.
+// Theme: night ride by default, follow saved preference, persist toggle.
+// scene.js reads html[data-theme] every frame and cross-fades the scenery.
 (function () {
   const root = document.documentElement;
   const saved = localStorage.getItem("theme");
@@ -13,20 +14,6 @@
     root.dataset.theme = next;
     localStorage.setItem("theme", next);
   });
-})();
-
-// Cursor glow follows the pointer (skipped on touch / reduced motion).
-(function () {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const body = document.body;
-  window.addEventListener(
-    "pointermove",
-    (e) => {
-      body.style.setProperty("--mx", e.clientX + "px");
-      body.style.setProperty("--my", e.clientY + "px");
-    },
-    { passive: true }
-  );
 })();
 
 // Scroll-reveal via IntersectionObserver.

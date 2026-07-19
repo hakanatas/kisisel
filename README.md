@@ -1,14 +1,20 @@
 # hakanatas.dev — Kişisel Site
 
-[dilum.dev](https://dilum.dev/) tarzında, minimal ve tipografi odaklı kişisel bir site.
-Hiçbir build aracı gerektirmez — saf HTML, CSS ve JavaScript.
+[dilum.dev](https://dilum.dev/) ruhunda, interaktif bir "yolculuk" arka planına sahip
+kişisel site. Hiçbir build aracı gerektirmez — saf HTML, CSS ve JavaScript.
 
 ## Özellikler
 
-- 🌙 Koyu/açık tema (sistem tercihini algılar, seçim hatırlanır)
-- ✨ İmleci takip eden ışıltı efekti ve nokta-ızgara arka plan
-- 📜 Kaydırdıkça beliren bölümler (scroll reveal)
-- 📱 Tamamen responsive tasarım
+- 🚴 **İnteraktif sahne**: Sayfayı kaydırdıkça arka plandaki manzarada pedal
+  çevirerek ilerleyen bir bisikletli (`scene.js`, saf canvas — bağımlılık yok)
+- 🌙 **Gece/gündüz geçişi**: Tema düğmesi tüm manzarayı dönüştürür — geceleri
+  yıldızlar, hilal, sokak lambaları ve bisikletin far ışığı; gündüz güneş,
+  bulutlar ve kuşlar
+- 🪧 Her bölüme yaklaşırken yol kenarında beliren tabelalar (About, Experience…)
+- 📏 Sol altta kat edilen mesafeyi gösteren kilometre sayacı
+- 🏔️ Paralaks katmanlar: dağlar, tepeler, ağaçlar, çalılar
+- 📜 Kaydırdıkça beliren cam görünümlü içerik panelleri
+- 📱 Tamamen responsive; `prefers-reduced-motion` tercihine saygılı
 - ⚡ Sıfır bağımlılık, tek sayfa
 
 ## İçeriği güncelleme
