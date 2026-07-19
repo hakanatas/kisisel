@@ -58,7 +58,35 @@ for (const [url, h] of [["assets/tree1.glb", 4.6]]) {
 }
 models.treeCount = treeTypes.length;
 
+/* pre-baked props: GLB textures baked to vertex colors offline (tiny JSON) */
+const propTypes = {};
+async function loadBaked(url, targetH) {
+  const g = await (await fetch(url)).json();
+  const b = vertsBounds([g.verts]);
+  const s = targetH / (b.maxY - b.minY);
+  const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
+  const v = Float32Array.from(g.verts);
+  for (let i = 0; i < v.length; i += 11) {
+    v[i] = (v[i] - cx) * s;
+    v[i + 1] = (v[i + 1] - b.minY) * s;
+    v[i + 2] = (v[i + 2] - cz) * s;
+  }
+  return [{ mesh: engine.meshFromGeo({ verts: v }), texture: null }];
+}
+try { propTypes.lamp = await loadBaked("assets/lamp.json", 2.9); } catch (e) { console.warn("lamp yüklenemedi", e); }
+models.hasLamp = !!propTypes.lamp;
+models.hasBench = false;
+
 const world = buildWorld(engine, models);
+
+/* static GLB instances (trees + props) with precomputed matrices */
+const instanced = [];
+for (const t of world.glbTrees) {
+  if (treeTypes[t.t]) instanced.push({ parts: treeTypes[t.t], m: mat4Compose(t.x, 0, t.z, t.yaw, 0, 0, t.s) });
+}
+for (const p of world.glbProps) {
+  if (propTypes[p.type]) instanced.push({ parts: propTypes[p.type], m: mat4Compose(p.x, 0, p.z, p.yaw, 0, 0, p.s || 1) });
+}
 if (params.has("tex")) {
   const dc = world.debugCanvas;
   dc.style.cssText = "position:fixed;inset:0;width:100vw;height:auto;z-index:99;background:#fff";
@@ -477,22 +505,17 @@ function frame(now) {
   }
   engine.draw(carMeshes.body, mat4Multiply(shadowMat, cm.body), SHADOW);
   engine.draw(world.tram.mesh, mat4Multiply(shadowMat, mat4Compose(world.tram.x, 0, world.tram.z)), SHADOW);
-  for (const t of world.glbTrees) {
-    const parts = treeTypes[t.t];
-    if (!parts) continue;
-    const m = mat4Multiply(shadowMat, mat4Compose(t.x, 0, t.z, t.yaw, 0, 0, t.s));
-    for (const p of parts) engine.draw(p.mesh, m, p.texture ? { ...SHADOW, texture: p.texture } : SHADOW);
+  for (const inst of instanced) {
+    const m = mat4Multiply(shadowMat, inst.m);
+    for (const p of inst.parts) engine.draw(p.mesh, m, p.texture ? { ...SHADOW, texture: p.texture } : SHADOW);
   }
   engine.endShadows();
   }
 
   /* 4 — solid world */
   if (only >= 2) engine.draw(world.propsMesh, mat4Compose(0, 0, 0));
-  for (const t of world.glbTrees) {
-    const parts = treeTypes[t.t];
-    if (!parts) continue;
-    const m = mat4Compose(t.x, 0, t.z, t.yaw, 0, 0, t.s);
-    for (const p of parts) engine.draw(p.mesh, m, p.texture ? { texture: p.texture } : {});
+  for (const inst of instanced) {
+    for (const p of inst.parts) engine.draw(p.mesh, inst.m, p.texture ? { texture: p.texture } : {});
   }
   if (only >= 3) engine.draw(world.skyMesh, mat4Compose(0, 0, 0));
   if (only >= 4) for (const s of world.signs) engine.draw(s.mesh, s.model, { texture: s.texture });

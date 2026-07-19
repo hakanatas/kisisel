@@ -381,8 +381,21 @@ export function buildWorld(engine, models = {}) {
     }
     collide(x, z, 0.5);
   });
-  mergeInto(props, benchGeo(), -24, 0, -14.5, Math.PI);
-  collide(-24, -14.5, 0.8);
+  const glbProps = [];
+  const glowPts = [];
+  const benchSpots = [[-24, -14.5, Math.PI], [18, 12.5, -Math.PI / 2], [-30, 16.5, 0.6]];
+  for (const [bx, bz, byaw] of benchSpots) {
+    if (models.hasBench) glbProps.push({ type: "bench", x: bx, z: bz, yaw: byaw, s: 1 });
+    else mergeInto(props, benchGeo(), bx, 0, bz, byaw);
+    collide(bx, bz, 0.8);
+  }
+  if (models.hasLamp) {
+    for (const [lx, lz] of [[-14, -3.2], [14, 3.2], [3.2, 18], [-26, -8], [12.5, -20]]) {
+      glbProps.push({ type: "lamp", x: lx, z: lz, yaw: Math.atan2(-lx, -lz), s: 1 });
+      collide(lx, lz, 0.3);
+      glowPts.push({ x: lx, y: 2.55, z: lz, r: 1.4, color: [1, 0.78, 0.4] });
+    }
+  }
   /* pale rocks */
   for (const [x, z, s] of [[-9, 27, 1], [22, 27, 0.8], [-38, -8, 1.2], [30, -7, 0.7], [6, -20, 0.6], [-15, 12, 0.55]]) {
     box(props, 0.8 * s, 0.5 * s, 0.6 * s, [0.88, 0.85, 0.82], { cx: x, cz: z });
@@ -412,7 +425,6 @@ export function buildWorld(engine, models = {}) {
   }
 
   /* glowing lanterns */
-  const glowPts = [];
   const lamps = [[-3.2, -10], [3.2, 10], [-10, 3.2], [10, -3.2], [17.2, -16], [-24, 4], [22, 12.5], [-26, -12], [8, 20]];
   for (const [x, z] of lamps) {
     const l = lanternGeo();
@@ -680,5 +692,5 @@ export function buildWorld(engine, models = {}) {
   box(gg, 0.1, 0.06, 0.06, [0.95, 0.7, 0.2], { cx: 0.2, cy: 0, centered: true });
   const gullMesh = engine.meshFromGeo(gg);
 
-  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, debugCanvas: gc };
+  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, glbProps, debugCanvas: gc };
 }

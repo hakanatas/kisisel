@@ -73,6 +73,7 @@ fonksiyonlarla kurulu.
 - **Galata Kulesi** — Hakan Ataş (bu proje için)
 - **Araba** (`car.glb`) — [Kenney](https://kenney.nl) (CC0)
 - **"Tree"** (`tree1.glb`) — [farhad.Guli](https://skfb.ly/U8nv), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
+- **"Low Poly Psx Street lamp"** (`lamp.json`, köşe renklerine pişirilmiş) — [SaukrDev](https://skfb.ly/oMORx), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
 
 ## Yerelde çalıştırma
 

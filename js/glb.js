@@ -80,10 +80,14 @@ export async function loadGLB(url, engine) {
           blob = new Blob([bin.slice(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength)], { type: img.mimeType });
         }
         let bmp = await createImageBitmap(blob);
-        // big Sketchfab textures: downscale before upload to save GPU memory
+        // big Sketchfab textures: downscale via 2D canvas (createImageBitmap's
+        // resize option hangs on some headless builds)
         if (bmp.width > 1024) {
-          const h = Math.round((bmp.height / bmp.width) * 1024);
-          bmp = await createImageBitmap(bmp, { resizeWidth: 1024, resizeHeight: h });
+          const cnv = document.createElement("canvas");
+          cnv.width = 1024;
+          cnv.height = Math.max(1, Math.round((bmp.height / bmp.width) * 1024));
+          cnv.getContext("2d").drawImage(bmp, 0, 0, cnv.width, cnv.height);
+          bmp = cnv;
         }
         textures.push(engine.textureFromImage(bmp));
       } catch (e) { textures.push(null); }

@@ -18,6 +18,10 @@
       const el = document.querySelector("#loading .load-card");
       if (el) el.textContent = "Error: " + e.message + " @ " + (e.filename || "").split("/").pop() + ":" + e.lineno;
     });
+    window.addEventListener("unhandledrejection", (e) => {
+      const el = document.querySelector("#loading .load-card");
+      if (el) el.textContent = "Rejection: " + (e.reason && (e.reason.stack || e.reason.message || e.reason));
+    });
   </script>
 </head>
 <body>
@@ -116,7 +120,8 @@
     </ul>
     <p class="credits">
       3D model credits:
-      <a href="https://skfb.ly/U8nv" target="_blank" rel="noopener">"Tree"</a> by farhad.Guli
+      <a href="https://skfb.ly/U8nv" target="_blank" rel="noopener">"Tree"</a> by farhad.Guli,
+      <a href="https://skfb.ly/oMORx" target="_blank" rel="noopener">"Street lamp"</a> by SaukrDev
       (<a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY 4.0</a>).
       Car by <a href="https://kenney.nl" target="_blank" rel="noopener">Kenney</a>.
       Galata Tower modeled by Hakan.
