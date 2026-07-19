@@ -66,6 +66,14 @@ fonksiyonlarla kurulu.
 2. Branch: `main` + `/ (root)` → Save
 3. Site `https://hakanatas.github.io/kisisel/` adresinde yayında
 
+## Varlıklar ve lisanslar
+
+`assets/` klasöründeki 3D modeller:
+
+- **Galata Kulesi** — Hakan Ataş (bu proje için)
+- **Araba** (`car.glb`) — [Kenney](https://kenney.nl) (CC0)
+- **"Tree"** (`tree1.glb`) — [farhad.Guli](https://skfb.ly/U8nv), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
+
 ## Yerelde çalıştırma
 
 ```bash

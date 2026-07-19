@@ -359,6 +359,14 @@ body {
 
 .contact-links { line-height: 2.1; }
 
+.credits {
+  margin-top: 16px !important;
+  font-size: 0.68rem !important;
+  color: #8a80a8 !important;
+  line-height: 1.6;
+}
+.credits a { color: #a89ecb; }
+
 /* ---------- achievements ---------- */
 .ach-panel { left: 20px; right: auto; transform: translateX(calc(-100% - 40px)); }
 .ach-panel.open { transform: none; }

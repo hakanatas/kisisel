@@ -36,6 +36,28 @@ try {
   carGLB = await loadGLB("assets/car.glb", engine);
 } catch (e) { console.warn("car.glb yüklenemedi", e); }
 
+/* community tree models (CC-BY, see README credits) */
+async function loadTreeType(url, targetH) {
+  const g = await loadGLB(url, engine);
+  const b = vertsBounds(g.nodes.map((n) => n.verts));
+  const s = targetH / (b.maxY - b.minY);
+  const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
+  return g.nodes.map((n) => {
+    const v = Float32Array.from(n.verts);
+    for (let i = 0; i < v.length; i += 11) {
+      v[i] = (v[i] - cx) * s;
+      v[i + 1] = (v[i + 1] - b.minY) * s;
+      v[i + 2] = (v[i + 2] - cz) * s;
+    }
+    return { mesh: engine.meshFromGeo({ verts: v }), texture: n.texture };
+  });
+}
+const treeTypes = [];
+for (const [url, h] of [["assets/tree1.glb", 4.6]]) {
+  try { treeTypes.push(await loadTreeType(url, h)); } catch (e) { console.warn(url, "yüklenemedi", e); }
+}
+models.treeCount = treeTypes.length;
+
 const world = buildWorld(engine, models);
 if (params.has("tex")) {
   const dc = world.debugCanvas;
@@ -455,11 +477,23 @@ function frame(now) {
   }
   engine.draw(carMeshes.body, mat4Multiply(shadowMat, cm.body), SHADOW);
   engine.draw(world.tram.mesh, mat4Multiply(shadowMat, mat4Compose(world.tram.x, 0, world.tram.z)), SHADOW);
+  for (const t of world.glbTrees) {
+    const parts = treeTypes[t.t];
+    if (!parts) continue;
+    const m = mat4Multiply(shadowMat, mat4Compose(t.x, 0, t.z, t.yaw, 0, 0, t.s));
+    for (const p of parts) engine.draw(p.mesh, m, p.texture ? { ...SHADOW, texture: p.texture } : SHADOW);
+  }
   engine.endShadows();
   }
 
   /* 4 — solid world */
   if (only >= 2) engine.draw(world.propsMesh, mat4Compose(0, 0, 0));
+  for (const t of world.glbTrees) {
+    const parts = treeTypes[t.t];
+    if (!parts) continue;
+    const m = mat4Compose(t.x, 0, t.z, t.yaw, 0, 0, t.s);
+    for (const p of parts) engine.draw(p.mesh, m, p.texture ? { texture: p.texture } : {});
+  }
   if (only >= 3) engine.draw(world.skyMesh, mat4Compose(0, 0, 0));
   if (only >= 4) for (const s of world.signs) engine.draw(s.mesh, s.model, { texture: s.texture });
   if (only < 5) { requestAnimationFrame(frame); return; }

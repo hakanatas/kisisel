@@ -41,6 +41,7 @@ void main() {
   vec4 texel = vec4(1.0);
   if (uUseTex > 0.5) {
     texel = texture2D(uTex, vUV);
+    if (texel.a < 0.45) discard; // alpha-cutout foliage
     base *= texel.rgb;
   }
   vec3 lit;

@@ -370,8 +370,15 @@ export function buildWorld(engine, models = {}) {
     [-36, 8, 1.2, "orange"], [28, -12, 1.1, "pink"], [28, 20, 1.0, "orange"], [-16, 28, 1.15, "yellow"],
     [12, 30, 1.1, "pink"], [-36, -30, 1.2, "green"], [-22, -18.5, 1.15, "pink"], [-30, -22, 0.95, "orange"],
   ];
+  /* a handful of spots get real GLB trees when available */
+  const glbTrees = [];
+  const glbSpots = new Set([0, 2, 8, 10, 14, 17]);
   trees.forEach(([x, z, s, pal], ti) => {
-    mergeInto(props, blobTreeGeo(ti * 7.3, s, pal), x, 0, z);
+    if (models.treeCount && glbSpots.has(ti)) {
+      glbTrees.push({ t: glbTrees.length % models.treeCount, x, z, s: 0.85 + (ti % 3) * 0.15, yaw: ti * 1.7 });
+    } else {
+      mergeInto(props, blobTreeGeo(ti * 7.3, s, pal), x, 0, z);
+    }
     collide(x, z, 0.5);
   });
   mergeInto(props, benchGeo(), -24, 0, -14.5, Math.PI);
@@ -640,5 +647,5 @@ export function buildWorld(engine, models = {}) {
   box(gg, 0.1, 0.06, 0.06, [0.95, 0.7, 0.2], { cx: 0.2, cy: 0, centered: true });
   const gullMesh = engine.meshFromGeo(gg);
 
-  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, debugCanvas: gc };
+  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, debugCanvas: gc };
 }

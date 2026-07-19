@@ -55,9 +55,10 @@ export async function loadGLB(url, engine) {
     const out = new Float32Array(acc.count * compCount);
     const src = new DataView(bin);
     const get = { 5120: "getInt8", 5121: "getUint8", 5122: "getInt16", 5123: "getUint16", 5125: "getUint32", 5126: "getFloat32" }[acc.componentType];
+    const norm = acc.normalized ? { 5121: 255, 5123: 65535, 5120: 127, 5122: 32767 }[acc.componentType] || 1 : 1;
     for (let i = 0; i < acc.count; i++) {
       for (let cix = 0; cix < compCount; cix++) {
-        out[i * compCount + cix] = src[get](base + i * stride + cix * compSize, true);
+        out[i * compCount + cix] = src[get](base + i * stride + cix * compSize, true) / norm;
       }
     }
     return out;
@@ -78,7 +79,12 @@ export async function loadGLB(url, engine) {
           const bv = json.bufferViews[img.bufferView];
           blob = new Blob([bin.slice(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength)], { type: img.mimeType });
         }
-        const bmp = await createImageBitmap(blob);
+        let bmp = await createImageBitmap(blob);
+        // big Sketchfab textures: downscale before upload to save GPU memory
+        if (bmp.width > 1024) {
+          const h = Math.round((bmp.height / bmp.width) * 1024);
+          bmp = await createImageBitmap(bmp, { resizeWidth: 1024, resizeHeight: h });
+        }
         textures.push(engine.textureFromImage(bmp));
       } catch (e) { textures.push(null); }
     }
@@ -103,6 +109,8 @@ export async function loadGLB(url, engine) {
         const pos = readAccessor(prim.attributes.POSITION);
         const nrm = prim.attributes.NORMAL !== undefined ? readAccessor(prim.attributes.NORMAL) : null;
         const uv = prim.attributes.TEXCOORD_0 !== undefined ? readAccessor(prim.attributes.TEXCOORD_0) : null;
+        const col0 = prim.attributes.COLOR_0 !== undefined ? readAccessor(prim.attributes.COLOR_0) : null;
+        const colStride = col0 ? { VEC3: 3, VEC4: 4 }[json.accessors[prim.attributes.COLOR_0].type] : 0;
         const idxArr = prim.indices !== undefined ? readAccessor(prim.indices) : null;
         const mat = materialInfo[prim.material] || { color: [1, 1, 1], texture: null };
         const count = idxArr ? idxArr.length : pos.length / 3;
@@ -126,6 +134,11 @@ export async function loadGLB(url, engine) {
           verts[o] = wx; verts[o + 1] = wy; verts[o + 2] = wz;
           verts[o + 3] = nx; verts[o + 4] = ny; verts[o + 5] = nz;
           verts[o + 6] = mat.color[0]; verts[o + 7] = mat.color[1]; verts[o + 8] = mat.color[2];
+          if (col0) {
+            verts[o + 6] *= col0[vi * colStride];
+            verts[o + 7] *= col0[vi * colStride + 1];
+            verts[o + 8] *= col0[vi * colStride + 2];
+          }
           verts[o + 9] = uv ? uv[vi * 2] : 0;
           verts[o + 10] = uv ? uv[vi * 2 + 1] : 0;
         }
