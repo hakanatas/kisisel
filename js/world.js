@@ -240,7 +240,7 @@ export function buildWorld(engine) {
     });
   };
 
-  makeSign(["HAKAN ATAS", "Educator & Developer — Istanbul"], 0, -12.5, 0, { w: 7, h: 2.1, y: 1.7 });
+  makeSign(["HAKAN ATAS", "Math & CS Teacher · Ed-Tech Developer", "Robotics Mentor — Istanbul"], 0, -12.5, 0, { w: 7, h: 2.3, y: 1.7 });
   makeSign(["Drive around to explore", "WASD / Arrows · R reset"], 5.8, -8, -0.5, { w: 4.6, h: 1.4, y: 1.3, bg: "#ffe9b8" });
   for (const zn of ZONES) {
     // sign sits just beyond the zone disc, facing the map center
