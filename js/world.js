@@ -22,6 +22,18 @@ const WOOD = [0.64, 0.48, 0.3];
 const STONE = [0.78, 0.75, 0.69];
 const TERRA = [0.66, 0.36, 0.29];
 
+/* career timeline lanes along the Experience street (x≈15, z −2 → −24) */
+const tlZ = (year) => -2 - (year - 2007) * 1.16;
+const LANES = [
+  { x: 12.1, c: [255, 209, 102], from: 2007, to: 2010, title: "MATH TEACHER", sub: "Uğur & İstek · 2007–10" },
+  { x: 13.1, c: [255, 159, 91], from: 2011, to: 2016, title: "ED-TECH LEAD", sub: "ALKEV · 2011–16" },
+  { x: 14.1, c: [255, 123, 172], from: 2013, to: 2014, title: "PROJECT COORD.", sub: "Yaratıcı Zihinler · 2013–14" },
+  { x: 15.1, c: [180, 135, 255], from: 2014, to: 2019, title: "EDUCATION CURATOR", sub: "Maker Hareketi · 2014–19" },
+  { x: 16.1, c: [111, 216, 229], from: 2016, to: 2018, title: "TEACHER", sub: "Enka Schools · 2016–18" },
+  { x: 17.1, c: [242, 240, 255], from: 2018, to: 2026.3, title: "HEAD OF DEPT.", sub: "ALKEV · 2018–now" },
+  { x: 18.1, c: [142, 224, 138], from: 2023, to: 2026.3, title: "FTC MENTOR", sub: "Team #24230 · 2023–now" },
+];
+
 export const ZONES = [
   { id: "about", label: "About Me", x: -26, z: -20, r: 6.5, color: [0.36, 0.68, 0.64] },
   { id: "experience", label: "Experience", x: 15, z: -22, r: 6.5, color: [0.93, 0.62, 0.28] },
@@ -183,6 +195,26 @@ export function buildWorld(engine, models = {}) {
     const px = ax + (bx - ax) * tileHash(i, 3) + (tileHash(i, 5) - 0.5) * 4.6;
     const pz = az + (bz - az) * tileHash(i, 3) + (tileHash(i, 11) - 0.5) * 4.6;
     c.fillRect(px, pz, 0.12 + t * 0.1, 0.1 + t * 0.08);
+  }
+
+  // ===== career timeline paint: glowing lanes + endpoint squares =====
+  for (const ln of LANES) {
+    const z0 = tlZ(ln.from), z1 = tlZ(ln.to);
+    const [cr, cg, cb] = ln.c;
+    c.lineCap = "round";
+    c.strokeStyle = `rgba(${cr},${cg},${cb},0.22)`;
+    c.lineWidth = 0.55;
+    c.beginPath(); c.moveTo(ln.x, z0); c.lineTo(ln.x, z1); c.stroke();
+    c.strokeStyle = `rgba(${cr},${cg},${cb},0.95)`;
+    c.lineWidth = 0.16;
+    c.beginPath(); c.moveTo(ln.x, z0); c.lineTo(ln.x, z1); c.stroke();
+    for (const ze of ln.to > 2026 ? [z0] : [z0, z1]) {
+      c.fillStyle = `rgba(${cr},${cg},${cb},0.95)`;
+      c.strokeStyle = `rgba(${cr},${cg},${cb},0.5)`;
+      c.lineWidth = 0.1;
+      c.fillRect(ln.x - 0.22, ze - 0.22, 0.44, 0.44);
+      c.strokeRect(ln.x - 0.38, ze - 0.38, 0.76, 0.76);
+    }
   }
 
   // zone discs: soft colored glow + ring
@@ -590,6 +622,40 @@ export function buildWorld(engine, models = {}) {
   }
   makeSign(["⚓ Ferry to the Bosphorus"], 31, 4, Math.PI / 2, { w: 3.6, h: 1.1, y: 1.2, bg: "#dff0f2" });
 
+  /* ===== timeline extras: year plates on the road + floating labels ===== */
+  const flats = [];
+  const makeYearPlate = (text, x, z) => {
+    const fg2 = geo();
+    box(fg2, 1.8, 0.07, 1.05, [0.14, 0.13, 0.18], { cx: 0, cz: 0 });
+    pushQuad(fg2,
+      [-0.8, 0.085, -0.42], [-0.8, 0.085, 0.42], [0.8, 0.085, 0.42], [0.8, 0.085, -0.42],
+      [1, 1, 1], [[0, 1], [0, 0], [1, 0], [1, 1]]);
+    const { canvas } = textCanvas([text], { size: 110, bg: "#242030", fg: "#f2f0ff", ratio: 2, pad: 0.14 });
+    flats.push({ mesh: engine.meshFromGeo(fg2), texture: engine.textureFromCanvas(canvas), model: mat4Compose(x, 0, z) });
+  };
+  for (const yr of [2007, 2011, 2015, 2019, 2023]) makeYearPlate(String(yr), 15.1, tlZ(yr) + 0.9);
+  makeYearPlate("TODAY", 15.1, -24.6);
+
+  const labels = [];
+  LANES.forEach((ln, li) => {
+    const lg = geo();
+    billboardQuad(lg, 3.4, 1.15, [1, 1, 1], { cy: 0 });
+    const [cr, cg, cb] = ln.c;
+    const { canvas } = textCanvas([ln.title, ln.sub], {
+      size: 150, ratio: 3, pad: 0.16,
+      bg: `rgba(${Math.round(cr * 0.25)},${Math.round(cg * 0.2)},${Math.round(cb * 0.3)},0.92)`,
+      fg: `rgb(${cr},${cg},${cb})`,
+    });
+    labels.push({
+      mesh: engine.meshFromGeo(lg),
+      texture: engine.textureFromCanvas(canvas),
+      model: mat4Compose(ln.x, 1.45 + (li % 3) * 0.75, tlZ(ln.from) + 0.2),
+    });
+    // glowing pylon at the lane start
+    box(props, 0.22, 1.05, 0.22, [0.16, 0.15, 0.22], { cx: ln.x, cz: tlZ(ln.from) + 0.55 });
+    glowPts.push({ x: ln.x, y: 1.0, z: tlZ(ln.from) + 0.55, r: 0.9, color: [cr / 255, cg / 255, cb / 255] });
+  });
+
   /* Turkish flag — crescent & star on a canvas texture */
   const flagCnv = document.createElement("canvas");
   flagCnv.width = 300; flagCnv.height = 200;
@@ -707,5 +773,11 @@ export function buildWorld(engine, models = {}) {
   box(gg, 0.1, 0.06, 0.06, [0.95, 0.7, 0.2], { cx: 0.2, cy: 0, centered: true });
   const gullMesh = engine.meshFromGeo(gg);
 
-  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, glbProps, debugCanvas: gc };
+  /* forest house diorama — a little home base on the west side */
+  if (models.hasHouse) {
+    glbProps.push({ type: "house", x: -38, z: 4, yaw: 0.7, s: 1 });
+    collide(-38, 4, 3.6);
+  }
+
+  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flats, labels, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, glbProps, debugCanvas: gc };
 }

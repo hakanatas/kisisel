@@ -39,15 +39,22 @@ async function loadTreeType(url, targetH) {
   const b = vertsBounds(g.nodes.map((n) => n.verts));
   const s = targetH / (b.maxY - b.minY);
   const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
-  return g.nodes.map((n) => {
-    const v = Float32Array.from(n.verts);
+  // group nodes by shared texture and merge each group into ONE mesh, so a
+  // 300-node diorama becomes 1-2 draw calls instead of 300
+  const groups = new Map();
+  for (const n of g.nodes) {
+    const key = n.texture || "none";
+    if (!groups.has(key)) groups.set(key, { texture: n.texture, verts: [] });
+    const dst = groups.get(key).verts;
+    const v = n.verts;
     for (let i = 0; i < v.length; i += 11) {
-      v[i] = (v[i] - cx) * s;
-      v[i + 1] = (v[i + 1] - b.minY) * s;
-      v[i + 2] = (v[i + 2] - cz) * s;
+      dst.push((v[i] - cx) * s, (v[i + 1] - b.minY) * s, (v[i + 2] - cz) * s,
+        v[i + 3], v[i + 4], v[i + 5], v[i + 6], v[i + 7], v[i + 8], v[i + 9], v[i + 10]);
     }
-    return { mesh: engine.meshFromGeo({ verts: v }), texture: n.texture };
-  });
+  }
+  return [...groups.values()].map((grp) => ({
+    mesh: engine.meshFromGeo({ verts: grp.verts }), texture: grp.texture,
+  }));
 }
 const treeTypes = [];
 
@@ -68,12 +75,13 @@ async function loadBaked(url, targetH) {
   return [{ mesh: engine.meshFromGeo({ verts: v }), texture: null }];
 }
 /* fetch + decode everything concurrently (much faster than sequential) */
-const [rGalata, rCar, rTree, rLamp, rGrass] = await Promise.allSettled([
+const [rGalata, rCar, rTree, rLamp, rGrass, rHouse] = await Promise.allSettled([
   loadGLB("assets/galata.glb", engine),
   loadGLB("assets/car.glb", engine),
   loadTreeType("assets/tree1.glb", 4.6),
   loadBaked("assets/lamp.json", 2.9),
   loadBaked("assets/grass.json", 0.5),
+  loadTreeType("assets/house.glb", 4.4),
 ]);
 if (rGalata.status === "fulfilled") {
   models.galata = { nodes: rGalata.value.nodes, bounds: vertsBounds(rGalata.value.nodes.map((n) => n.verts)) };
@@ -86,9 +94,12 @@ if (rLamp.status === "fulfilled") propTypes.lamp = rLamp.value;
 else console.warn("lamp yüklenemedi", rLamp.reason);
 if (rGrass.status === "fulfilled") propTypes.grass = rGrass.value;
 else console.warn("grass yüklenemedi", rGrass.reason);
+if (rHouse.status === "fulfilled") propTypes.house = rHouse.value;
+else console.warn("house yüklenemedi", rHouse.reason);
 models.treeCount = treeTypes.length;
 models.hasLamp = !!propTypes.lamp;
 models.hasGrass = !!propTypes.grass;
+models.hasHouse = !!propTypes.house;
 models.hasBench = false;
 
 setLoad("Dünya inşa ediliyor…");
@@ -535,6 +546,10 @@ function frame(now) {
   if (only >= 3) engine.draw(world.skyMesh, mat4Compose(0, 0, 0));
   if (only >= 4) for (const s of world.signs) engine.draw(s.mesh, s.model, { texture: s.texture });
   if (only < 5) { requestAnimationFrame(frame); return; }
+
+  /* timeline year plates + floating labels */
+  for (const f of world.flats) engine.draw(f.mesh, f.model, { texture: f.texture });
+  for (const l of world.labels) engine.draw(l.mesh, l.model, { texture: l.texture });
 
   /* flag with a gentle flutter */
   engine.draw(world.flag.mesh,
