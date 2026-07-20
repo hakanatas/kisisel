@@ -25,13 +25,13 @@ const TERRA = [0.66, 0.36, 0.29];
 /* career timeline lanes along the Experience street (x≈15, z −2 → −24) */
 const tlZ = (year) => -2 - (year - 2007) * 1.16;
 const LANES = [
-  { x: 12.1, c: [255, 209, 102], from: 2007, to: 2010, title: "MATH TEACHER", sub: "Uğur & İstek · 2007–10" },
-  { x: 13.1, c: [255, 159, 91], from: 2011, to: 2016, title: "ED-TECH LEAD", sub: "ALKEV · 2011–16" },
-  { x: 14.1, c: [255, 123, 172], from: 2013, to: 2014, title: "PROJECT COORD.", sub: "Yaratıcı Zihinler · 2013–14" },
-  { x: 15.1, c: [180, 135, 255], from: 2014, to: 2019, title: "EDUCATION CURATOR", sub: "Maker Hareketi · 2014–19" },
-  { x: 16.1, c: [111, 216, 229], from: 2016, to: 2018, title: "TEACHER", sub: "Enka Schools · 2016–18" },
-  { x: 17.1, c: [242, 240, 255], from: 2018, to: 2026.3, title: "HEAD OF DEPT.", sub: "ALKEV · 2018–now" },
-  { x: 18.1, c: [142, 224, 138], from: 2023, to: 2026.3, title: "FTC MENTOR", sub: "Team #24230 · 2023–now" },
+  { x: 12.1, c: [255, 209, 102], from: 2007, to: 2010, title: "MATH TEACHER", org: "Uğur & İstek", years: "2007 — 2010", note: "Geometry · uni prep" },
+  { x: 13.1, c: [255, 159, 91], from: 2011, to: 2016, title: "ED-TECH LEAD", org: "ALKEV Schools", years: "2011 — 2016", note: "Digital Authorship curriculum" },
+  { x: 14.1, c: [255, 123, 172], from: 2013, to: 2014, title: "PROJECT COORD.", org: "Yaratıcı Zihinler", years: "2013 — 2014", note: "Game & crypto workshops" },
+  { x: 15.1, c: [180, 135, 255], from: 2014, to: 2019, title: "EDUCATION CURATOR", org: "Maker Hareketi", years: "2014 — 2019", note: "Democratizing making" },
+  { x: 16.1, c: [111, 216, 229], from: 2016, to: 2018, title: "TEACHER", org: "Enka Schools", years: "2016 — 2018", note: "Math & technology" },
+  { x: 17.1, c: [242, 240, 255], from: 2018, to: 2026.3, title: "HEAD OF DEPT.", org: "ALKEV Schools", years: "2018 — now", note: "Projects & technology" },
+  { x: 18.1, c: [142, 224, 138], from: 2023, to: 2026.3, title: "FTC MENTOR", org: "Team #24230", years: "2023 — now", note: "FIRST Tech Challenge" },
 ];
 
 export const ZONES = [
@@ -636,25 +636,77 @@ export function buildWorld(engine, models = {}) {
   for (const yr of [2007, 2011, 2015, 2019, 2023]) makeYearPlate(String(yr), 15.1, tlZ(yr) + 0.9);
   makeYearPlate("TODAY", 15.1, -24.6);
 
-  const labels = [];
-  LANES.forEach((ln, li) => {
-    const lg = geo();
-    billboardQuad(lg, 3.4, 1.15, [1, 1, 1], { cy: 0 });
+  /* Rich milestone card texture: colored title + white detail lines on a
+     rounded translucent panel, with a small accent tab. Two versions per
+     card (dim = far, bright = near) so proximity can cross-fade them. */
+  const makeCard = (ln, bright) => {
+    const W = 512, H = 224, cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const x = cv.getContext("2d");
     const [cr, cg, cb] = ln.c;
-    const { canvas } = textCanvas([ln.title, ln.sub], {
-      size: 150, ratio: 3, pad: 0.16,
-      bg: `rgba(${Math.round(cr * 0.25)},${Math.round(cg * 0.2)},${Math.round(cb * 0.3)},0.92)`,
-      fg: `rgb(${cr},${cg},${cb})`,
-    });
-    labels.push({
-      mesh: engine.meshFromGeo(lg),
-      texture: engine.textureFromCanvas(canvas),
-      model: mat4Compose(ln.x, 1.45 + (li % 3) * 0.75, tlZ(ln.from) + 0.2),
+    const a = bright ? 0.96 : 0.66;
+    const round = (rx, ry, rw, rh, rr) => {
+      x.beginPath();
+      x.moveTo(rx + rr, ry);
+      x.arcTo(rx + rw, ry, rx + rw, ry + rh, rr);
+      x.arcTo(rx + rw, ry + rh, rx, ry + rh, rr);
+      x.arcTo(rx, ry + rh, rx, ry, rr);
+      x.arcTo(rx, ry, rx + rw, ry, rr);
+      x.closePath();
+    };
+    x.fillStyle = `rgba(20,16,30,${a})`;
+    round(8, 8, W - 16, H - 16, 22); x.fill();
+    if (bright) { x.lineWidth = 3; x.strokeStyle = `rgba(${cr},${cg},${cb},0.9)`; x.stroke(); }
+    // accent tab
+    x.fillStyle = `rgb(${cr},${cg},${cb})`;
+    round(26, 30, 12, H - 60, 6); x.fill();
+    x.textAlign = "left";
+    x.textBaseline = "middle";
+    x.fillStyle = bright ? `rgb(${cr},${cg},${cb})` : `rgba(${cr},${cg},${cb},0.82)`;
+    x.font = "700 46px 'DejaVu Sans', Arial, sans-serif";
+    x.fillText(ln.title, 58, 54);
+    x.fillStyle = bright ? "rgba(245,242,255,0.95)" : "rgba(220,215,235,0.7)";
+    x.font = "600 32px 'DejaVu Sans', Arial, sans-serif";
+    x.fillText(ln.org, 58, 104);
+    x.font = "500 30px 'DejaVu Sans', Arial, sans-serif";
+    x.fillStyle = bright ? "rgba(210,205,230,0.9)" : "rgba(190,185,210,0.6)";
+    x.fillText(ln.years, 58, 146);
+    x.font = "italic 500 27px 'DejaVu Sans', Arial, sans-serif";
+    x.fillStyle = bright ? `rgba(${cr},${cg},${cb},0.85)` : `rgba(${cr},${cg},${cb},0.5)`;
+    x.fillText(ln.note, 58, 186);
+    return engine.textureFromCanvas(cv);
+  };
+
+  // one shared centered SINGLE-SIDED quad (front face only) so the mirrored
+  // back can never overpaint the text; billboarded to face the camera
+  const cardGeo = geo();
+  {
+    const hw = 1.9, hh = 0.83;
+    pushQuad(cardGeo, [-hw, -hh, 0], [hw, -hh, 0], [hw, hh, 0], [-hw, hh, 0],
+      [1, 1, 1], [[0, 0], [1, 0], [1, 1], [0, 1]]);
+  }
+  const cardMesh = engine.meshFromGeo(cardGeo);
+
+  const milestones = [];
+  LANES.forEach((ln, li) => {
+    const [cr, cg, cb] = ln.c;
+    milestones.push({
+      x: ln.x, z: tlZ(ln.from) + 0.2,
+      baseY: 1.5 + (li % 4) * 0.72,
+      mesh: cardMesh,
+      texDim: makeCard(ln, false),
+      texBright: makeCard(ln, true),
+      color: [cr / 255, cg / 255, cb / 255],
     });
     // glowing pylon at the lane start
     box(props, 0.22, 1.05, 0.22, [0.16, 0.15, 0.22], { cx: ln.x, cz: tlZ(ln.from) + 0.55 });
     glowPts.push({ x: ln.x, y: 1.0, z: tlZ(ln.from) + 0.55, r: 0.9, color: [cr / 255, cg / 255, cb / 255] });
   });
+
+  /* lane segments for flowing pulse markers (drawn dynamically) */
+  const laneSegments = LANES.map((ln) => ({
+    x: ln.x, z0: tlZ(ln.from), z1: tlZ(ln.to), color: [ln.c[0] / 255, ln.c[1] / 255, ln.c[2] / 255],
+  }));
 
   /* Turkish flag — crescent & star on a canvas texture */
   const flagCnv = document.createElement("canvas");
@@ -779,5 +831,5 @@ export function buildWorld(engine, models = {}) {
     collide(-38, 4, 3.6);
   }
 
-  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flats, labels, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, glbProps, debugCanvas: gc };
+  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flats, milestones, laneSegments, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, glbProps, debugCanvas: gc };
 }

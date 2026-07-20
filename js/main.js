@@ -547,9 +547,38 @@ function frame(now) {
   if (only >= 4) for (const s of world.signs) engine.draw(s.mesh, s.model, { texture: s.texture });
   if (only < 5) { requestAnimationFrame(frame); return; }
 
-  /* timeline year plates + floating labels */
+  /* timeline year plates (flat road decals) */
   for (const f of world.flats) engine.draw(f.mesh, f.model, { texture: f.texture });
-  for (const l of world.labels) engine.draw(l.mesh, l.model, { texture: l.texture });
+
+  /* flowing pulse markers travelling along each career lane */
+  for (const seg of world.laneSegments) {
+    const span = seg.z1 - seg.z0;
+    for (let k = 0; k < 3; k++) {
+      const t = ((time * 0.22 + k / 3) % 1);
+      const pz = seg.z0 + span * t;
+      const fade = Math.sin(t * Math.PI); // dim at both ends
+      drawGlow(seg.x, 0.12, pz, 0.5 + fade * 0.3, seg.color, 0.35 * fade + 0.15);
+    }
+  }
+
+  /* interactive milestone cards: camera-facing, grow + brighten near the car.
+     Sorted far→near so nearer cards paint on top. */
+  const msByDist = world.milestones
+    .map((m) => ({ m, d: Math.hypot(car.x - m.x, car.z - m.z) }))
+    .sort((a, b) => b.d - a.d);
+  for (const { m, d } of msByDist) {
+    const near = clamp(1 - (d - 2) / 7, 0, 1);          // 1 when close, 0 when far
+    const yaw = Math.atan2(cam.x - m.x, cam.z - m.z);
+    const bob = Math.sin(time * 1.4 + m.x) * 0.06;
+    const y = m.baseY + near * 0.5 + bob;
+    const scale = 0.5 + near * 0.62;                     // distant cards shrink
+    engine.draw(m.mesh, mat4Compose(m.x, y, m.z, yaw, 0, 0, scale), { texture: m.texDim, noDepthWrite: true });
+    if (near > 0.01) {
+      engine.draw(m.mesh, mat4Compose(m.x, y, m.z, yaw, 0, 0, scale * 1.001),
+        { texture: m.texBright, alpha: near, noDepthWrite: true });
+    }
+    if (near > 0.55) drawGlow(m.x, y - 0.85, m.z, 1.0, m.color, (near - 0.55) * 0.6);
+  }
 
   /* flag with a gentle flutter */
   engine.draw(world.flag.mesh,
