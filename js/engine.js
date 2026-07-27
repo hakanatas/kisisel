@@ -331,10 +331,13 @@ export class Engine {
 
   /* Shadow pass: everything drawn between begin/end darkens each pixel at
      most once (stencil), so overlapping shadows do not double-darken. */
-  beginShadows() {
+  /* layers > 1 lets the caller draw the same shadow several times with the
+     light jittered: overlapping cores reach full darkness while the fringes
+     only get hit by some passes, which reads as a soft penumbra. */
+  beginShadows(layers = 1) {
     const gl = this.gl;
     gl.enable(gl.STENCIL_TEST);
-    gl.stencilFunc(gl.EQUAL, 0, 0xff);
+    gl.stencilFunc(gl.GREATER, layers, 0xff);
     gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR);
     gl.depthMask(false);
   }

@@ -779,7 +779,7 @@ export function buildWorld(engine, models = {}) {
   const dynamics = [];
   const addDyn = (mesh, x, z, opts = {}) => {
     dynamics.push({
-      kind: opts.kind || "obj", id: dynamics.length, knocked: false,
+      kind: opts.kind || "obj", id: dynamics.length, knocked: false, rest: 0,
       mesh, texture: opts.texture || null,
       x, y: 0, z, yaw: opts.yaw || 0, pitch: 0, roll: 0,
       vx: 0, vy: 0, vz: 0, wyaw: 0, wpitch: 0,

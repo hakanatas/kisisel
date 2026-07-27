@@ -24,7 +24,11 @@ engine.setFog([0.92, 0.72, 0.68], 0.00004);
 const LIGHT = [0.72, 0.5, 0.3]; // must match engine's sun
 const LIGHT_LEN = Math.hypot(...LIGHT);
 const LIGHT_N = LIGHT.map((v) => v / LIGHT_LEN);
-const shadowMat = mat4ShadowY(LIGHT, 0.02);
+/* One projected shadow pass, stencil-deduplicated so overlapping casters
+   never double-darken. (Multi-pass jitter for a penumbra was tried and
+   renders wrong on this path, so the crisp single pass stays.) */
+const SHADOW_MATS = [mat4ShadowY(LIGHT, 0.02)];
+const shadowMat = SHADOW_MATS[0];
 const SHADOW = { override: [0.2, 0.13, 0.38], alpha: 0.48 }; // purple dusk shadows
 
 /* load Hakan's GLB models (graceful fallback to primitives) */
@@ -289,7 +293,7 @@ function addSkids(dt) {
 /* ---------- dynamics physics ---------- */
 function resetDynamics() {
   for (const d of world.dynamics) {
-    d.x = d.x0; d.z = d.z0; d.y = 0;
+    d.x = d.x0; d.z = d.z0; d.y = 0; d.rest = 0;
     d.yaw = d.yaw0; d.pitch = 0; d.roll = 0;
     d.vx = d.vy = d.vz = d.wyaw = d.wpitch = 0;
   }
@@ -319,18 +323,79 @@ function updateDynamics(dt) {
         if (d.kind === "pin") ach.mark("pins", d.id);
       }
     }
-    const moving = Math.abs(d.vx) + Math.abs(d.vy) + Math.abs(d.vz) > 0.01 || d.y > 0.001;
+    const moving = Math.abs(d.vx) + Math.abs(d.vy) + Math.abs(d.vz) > 0.01 || d.y > d.rest + 0.001;
     if (!moving) continue;
     d.vy -= 21 * dt;
     d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
     d.yaw += d.wyaw * dt; d.pitch += d.wpitch * dt;
-    if (d.y <= 0) {
-      d.y = 0;
-      if (d.vy < -2.5) d.vy = -d.vy * 0.35;
+  }
+
+  /* ---- object vs object: impulses, chain reactions and stacking ---- */
+  const list = world.dynamics;
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    for (let j = i + 1; j < list.length; j++) {
+      const b = list[j];
+      // only collide if they overlap vertically as well as horizontally
+      const aTop = a.y + a.h, bTop = b.y + b.h;
+      if (a.y > bTop - 0.06 || b.y > aTop - 0.06) continue;
+      let dx = b.x - a.x, dz = b.z - a.z;
+      let dist = Math.hypot(dx, dz);
+      const minD = a.r + b.r;
+      if (dist >= minD) continue;
+      if (dist < 0.0001) { dx = 0.01; dz = 0; dist = 0.01; }
+      const nx = dx / dist, nz = dz / dist;
+
+      // push apart, heavier objects give way less
+      const total = a.mass + b.mass;
+      const overlap = minD - dist;
+      a.x -= nx * overlap * (b.mass / total); a.z -= nz * overlap * (b.mass / total);
+      b.x += nx * overlap * (a.mass / total); b.z += nz * overlap * (a.mass / total);
+
+      // exchange momentum along the contact normal
+      const rel = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
+      if (rel < 0) {
+        const imp = (-(1 + 0.35) * rel) / total;
+        a.vx -= imp * b.mass * nx; a.vz -= imp * b.mass * nz;
+        b.vx += imp * a.mass * nx; b.vz += imp * a.mass * nz;
+        // a solid knock also sets things spinning and topples them
+        const hit = Math.abs(rel);
+        if (hit > 0.6) {
+          a.wyaw -= rel * 1.2; b.wyaw += rel * 1.2;
+          a.wpitch += hit * 0.9; b.wpitch += hit * 0.9;
+          if (hit > 1.2) audio.thump(hit / 6);
+          for (const o of [a, b]) {
+            if (!o.knocked) {
+              o.knocked = true;
+              ach.bump("knock");
+              if (o.kind === "letter") ach.mark("letters", o.id);
+              if (o.kind === "pin") ach.mark("pins", o.id);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* ---- resting: land on the ground or on top of whatever is below ---- */
+  for (const d of list) {
+    let support = 0;
+    for (const o of list) {
+      if (o === d) continue;
+      const oTop = o.y + o.h;
+      if (oTop > d.y + d.h * 0.5) continue;          // not below us
+      if (Math.hypot(o.x - d.x, o.z - d.z) > (o.r + d.r) * 0.8) continue;
+      if (oTop > support) support = oTop;
+    }
+    d.rest = support;
+    if (d.y <= support) {
+      d.y = support;
+      if (d.vy < -2.5) d.vy = -d.vy * 0.32;          // bounce
       else {
         d.vy = 0;
-        d.vx *= Math.max(0, 1 - 6 * dt);
-        d.vz *= Math.max(0, 1 - 6 * dt);
+        const fr = support > 0 ? 9 : 6;              // more grip when stacked
+        d.vx *= Math.max(0, 1 - fr * dt);
+        d.vz *= Math.max(0, 1 - fr * dt);
         d.wyaw *= Math.max(0, 1 - 4 * dt);
         d.wpitch *= Math.max(0, 1 - 4 * dt);
         if (Math.hypot(d.vx, d.vz) < 0.1) { d.vx = d.vz = 0; d.wyaw = 0; d.wpitch = 0; }
@@ -595,17 +660,19 @@ function frame(now) {
 
   /* 3 — projected shadows (each pixel darkened once via stencil) */
   if (!params.has("nosh")) {
-  engine.beginShadows();
-  engine.draw(world.propsMesh, shadowMat, SHADOW);
-  for (const s of world.signs) engine.draw(s.mesh, mat4Multiply(shadowMat, s.model), SHADOW);
-  for (const d of world.dynamics) {
-    engine.draw(d.mesh, mat4Multiply(shadowMat, mat4Compose(d.x, d.y, d.z, d.yaw, d.pitch, d.roll, d.scale)), SHADOW);
-  }
-  engine.draw(carMeshes.body, mat4Multiply(shadowMat, cm.body), SHADOW);
-  engine.draw(world.tram.mesh, mat4Multiply(shadowMat, mat4Compose(world.tram.x, 0, world.tram.z)), SHADOW);
-  for (const inst of instanced) {
-    const m = mat4Multiply(shadowMat, inst.m);
-    for (const p of inst.parts) engine.draw(p.mesh, m, p.texture ? { ...SHADOW, texture: p.texture } : SHADOW);
+  engine.beginShadows(SHADOW_MATS.length);
+  for (const sm of SHADOW_MATS) {
+    engine.draw(world.propsMesh, sm, SHADOW);
+    for (const s of world.signs) engine.draw(s.mesh, mat4Multiply(sm, s.model), SHADOW);
+    for (const d of world.dynamics) {
+      engine.draw(d.mesh, mat4Multiply(sm, mat4Compose(d.x, d.y, d.z, d.yaw, d.pitch, d.roll, d.scale)), SHADOW);
+    }
+    engine.draw(carMeshes.body, mat4Multiply(sm, cm.body), SHADOW);
+    engine.draw(world.tram.mesh, mat4Multiply(sm, mat4Compose(world.tram.x, 0, world.tram.z)), SHADOW);
+    for (const inst of instanced) {
+      const m = mat4Multiply(sm, inst.m);
+      for (const p of inst.parts) engine.draw(p.mesh, m, p.texture ? { ...SHADOW, texture: p.texture } : SHADOW);
+    }
   }
   engine.endShadows();
   }
