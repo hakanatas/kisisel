@@ -6,7 +6,7 @@
    Plus: textured signs, knockable dynamics, colliders, zones, ferry,
    tram and the flag. */
 
-import { geo, box, cylinder, pushQuad, billboardQuad, transformGeo, mergeInto, blobTreeGeo, grassTuftGeo, lanternGeo, voxelLetterGeo, benchGeo, pinGeo, coneGeo } from "./meshes.js";
+import { geo, box, cylinder, disc, pushQuad, billboardQuad, transformGeo, mergeInto, blobTreeGeo, grassTuftGeo, lanternGeo, voxelLetterGeo, benchGeo, pinGeo, coneGeo } from "./meshes.js";
 import { mat4Compose } from "./math3d.js";
 import { textCanvas } from "./engine.js";
 
@@ -574,14 +574,56 @@ export function buildWorld(engine, models = {}) {
   cloud(-20, 15, -30, 1.6); cloud(15, 18, 25, 2.0); cloud(40, 16, 0, 1.7);
   cloud(-38, 17, 15, 1.4); cloud(60, 19, -14, 2.2); cloud(8, 21, -6, 1.2);
 
-  /* far shore skyline across the water (land itself is painted) */
-  const farB = (z, w, h, c2) => box(sky, w, h, 3, c2, { cx: 77 + (z % 3), cz: z });
-  farB(-30, 4, 3.4, [0.72, 0.7, 0.68]); farB(-22, 3, 5, [0.68, 0.66, 0.66]);
-  farB(-13, 5, 2.6, [0.75, 0.7, 0.64]); farB(-4, 3, 4.2, [0.7, 0.68, 0.7]);
-  farB(5, 4, 3, [0.74, 0.7, 0.62]); farB(14, 3, 5.5, [0.66, 0.66, 0.68]);
-  farB(24, 5, 2.8, [0.76, 0.72, 0.66]); farB(33, 3, 4, [0.7, 0.66, 0.62]);
-  cylinder(sky, 0.9, 0.8, 6, 8, [0.72, 0.7, 0.66], { cx: 77, cz: -37 });
-  cylinder(sky, 1.1, 0, 1.8, 8, [0.5, 0.42, 0.4], { cx: 77, cy: 6, cz: -37 });
+  /* ===== animated sea surface (shader-driven), routed around the pier ===== */
+  const water = geo();
+  const waterQuad = (x0, z0, x1, z1) => {
+    pushQuad(water, [x0, 0.03, z0], [x0, 0.03, z1], [x1, 0.03, z1], [x1, 0.03, z0], [1, 1, 1]);
+  };
+  waterQuad(33.6, -44, 74, PIER.minZ);            // north of the pier
+  waterQuad(33.6, PIER.maxZ, 74, 44);             // south of the pier
+  waterQuad(PIER.maxX, PIER.minZ, 74, PIER.maxZ); // east of the pier
+  const waterMesh = engine.meshFromGeo(water);
+
+  /* Kız Kulesi islet has to sit above the new sea surface */
+  disc(props, 2.9, 12, [0.86, 0.82, 0.73], { cx: 47, cy: 0.06, cz: 20 });
+  disc(props, 3.3, 12, [0.93, 0.9, 0.82], { cx: 47, cy: 0.04, cz: 20 });
+
+  /* ===== far shore: an Istanbul silhouette in dusk haze ===== */
+  const SIL = [0.62, 0.46, 0.6];        // hazy purple, reads as distance
+  const SIL2 = [0.68, 0.5, 0.58];
+  const DOME = [0.58, 0.44, 0.58];
+  const farB = (z, w, h, c2) => box(sky, w, h, 3.2, c2, { cx: 77 + (z % 3), cz: z });
+  farB(-34, 4, 3.0, SIL); farB(-28, 3, 4.6, SIL2); farB(-19, 5, 2.4, SIL);
+  farB(-11, 3, 3.8, SIL2); farB(2, 4, 2.8, SIL); farB(9, 3, 4.4, SIL2);
+  farB(28, 5, 2.6, SIL); farB(36, 3, 3.6, SIL2);
+
+  /* a mosque: central dome, half domes and twin minarets */
+  const mosque = (mz, s) => {
+    const m = geo();
+    box(m, 5.2 * s, 2.0 * s, 4.2 * s, SIL);
+    cylinder(m, 2.0 * s, 1.85 * s, 0.5 * s, 14, DOME, { cy: 2.0 * s });
+    // dome: stacked rings approximating a hemisphere
+    for (let i = 0; i < 6; i++) {
+      const t0 = i / 6, t1 = (i + 1) / 6;
+      const r0 = Math.cos(t0 * Math.PI / 2) * 1.85 * s;
+      const r1 = Math.cos(t1 * Math.PI / 2) * 1.85 * s;
+      cylinder(m, r0, r1, (Math.sin(t1 * Math.PI / 2) - Math.sin(t0 * Math.PI / 2)) * 1.5 * s, 14, DOME,
+        { cy: 2.5 * s + Math.sin(t0 * Math.PI / 2) * 1.5 * s });
+    }
+    cylinder(m, 0.06 * s, 0.04 * s, 0.7 * s, 5, [0.75, 0.62, 0.7], { cy: 4.0 * s });
+    for (const mx of [-2.9 * s, 2.9 * s]) {
+      cylinder(m, 0.26 * s, 0.2 * s, 6.2 * s, 8, SIL2, { cx: mx });
+      cylinder(m, 0.34 * s, 0.34 * s, 0.16 * s, 8, DOME, { cx: mx, cy: 4.2 * s });
+      cylinder(m, 0.2 * s, 0, 1.1 * s, 8, DOME, { cx: mx, cy: 6.2 * s });
+      cylinder(m, 0.04 * s, 0.03 * s, 0.5 * s, 4, [0.75, 0.62, 0.7], { cx: mx, cy: 7.3 * s });
+    }
+    transformGeo(m, mat4Compose(78, 0, mz, -Math.PI / 2));
+    sky.verts.push(...m.verts);
+  };
+  mosque(-2, 1.05);
+  mosque(20, 0.8);
+  cylinder(sky, 0.9, 0.8, 6, 8, SIL2, { cx: 77, cz: -41 });
+  cylinder(sky, 1.1, 0, 1.8, 8, DOME, { cx: 77, cy: 6, cz: -41 });
 
   /* baked vertical ambient occlusion: props darken toward the ground */
   const applyAO = (g, maxH) => {
@@ -831,5 +873,5 @@ export function buildWorld(engine, models = {}) {
     collide(-38, 4, 3.6);
   }
 
-  return { groundMesh, groundTexture, propsMesh, skyMesh, signs, flats, milestones, laneSegments, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, glbProps, debugCanvas: gc };
+  return { groundMesh, groundTexture, waterMesh, propsMesh, skyMesh, signs, flats, milestones, laneSegments, flag, dynamics, colliders, ferry, tram, gullMesh, glowPts, glbTrees, glbProps, debugCanvas: gc };
 }

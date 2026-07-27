@@ -36,6 +36,8 @@ uniform sampler2D uTex;
 uniform float uUseTex;
 uniform float uAlpha;
 uniform vec4 uOverride; // rgb + enable flag: unlit flat color (shadows, fx)
+uniform float uTime;
+uniform float uWater;   // 1.0 = procedural animated sea
 void main() {
   vec3 base = vColor;
   vec4 texel = vec4(1.0);
@@ -45,7 +47,37 @@ void main() {
     base *= texel.rgb;
   }
   vec3 lit;
-  if (uOverride.a > 0.5) {
+  if (uWater > 0.5) {
+    // ---- living sea: crossing swells, depth gradient, glitter, foam ----
+    vec2 p = vWorld.xz;   // p.y is world Z
+    float swell = sin(p.x * 0.42 + uTime * 0.85) * 0.34
+                + sin(p.y * 0.31 - uTime * 0.63 + p.x * 0.12) * 0.34
+                + sin((p.x * 0.7 + p.y * 0.55) + uTime * 1.35) * 0.2;
+    float ripple = swell * 0.5 + 0.5;
+
+    float depth = clamp((p.x - 34.5) / 26.0, 0.0, 1.0);
+    vec3 shallow = vec3(0.55, 0.84, 0.76);
+    vec3 deep = vec3(0.10, 0.34, 0.48);
+    vec3 col = mix(shallow, deep, depth * depth);
+    col += (ripple - 0.5) * 0.11;
+
+    // warm sun glitter: two incommensurate frequencies so it never grids up
+    float g1 = sin(p.y * 3.1 + uTime * 1.15 + swell * 2.2) * sin(p.x * 2.3 - uTime * 0.9);
+    float g2 = sin(p.y * 1.37 - uTime * 0.71) * sin(p.x * 1.83 + uTime * 0.53 + swell * 3.1);
+    float glitter = pow(max(g1 * g2, 0.0), 9.0);
+    float band = smoothstep(30.0, 3.0, abs(p.y - 6.0));
+    col += glitter * band * vec3(1.7, 1.2, 0.7);
+
+    // the sunset sky reflects off the sea toward the horizon
+    col = mix(col, vec3(1.0, 0.66, 0.5), smoothstep(52.0, 74.0, p.x) * 0.5);
+
+    // foam along the wavy shoreline
+    float shore = 34.7 + sin(p.y * 0.5) * 0.4 + ripple * 0.55;
+    float foam = smoothstep(1.5, 0.0, abs(p.x - shore));
+    col = mix(col, vec3(0.98, 0.99, 1.0), foam * (0.3 + 0.45 * ripple));
+
+    lit = col;
+  } else if (uOverride.a > 0.5) {
     lit = uOverride.rgb;
   } else {
     vec3 n = normalize(vNormal);
@@ -95,9 +127,11 @@ export class Engine {
       uv: gl.getAttribLocation(prog, "aUV"),
     };
     this.uni = {};
-    for (const n of ["uVP", "uModel", "uLightDir", "uFogColor", "uFogDensity", "uTex", "uUseTex", "uAlpha", "uOverride", "uEye"])
+    for (const n of ["uVP", "uModel", "uLightDir", "uFogColor", "uFogDensity", "uTex", "uUseTex", "uAlpha", "uOverride", "uEye", "uTime", "uWater"])
       this.uni[n] = gl.getUniformLocation(prog, n);
     gl.uniform4f(this.uni.uOverride, 0, 0, 0, 0);
+    gl.uniform1f(this.uni.uWater, 0);
+    gl.uniform1f(this.uni.uTime, 0);
 
     gl.enable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
@@ -122,15 +156,38 @@ export class Engine {
     const vs = `attribute vec2 aP; varying vec2 vP; void main(){ vP = aP; gl_Position = vec4(aP,0.999,1.0); }`;
     const fs = `precision mediump float; varying vec2 vP; uniform float uMode;
       uniform vec3 uTop; uniform vec3 uHorizon;
+      uniform vec3 uRight; uniform vec3 uUp; uniform vec3 uFwd;
+      uniform vec3 uSunDir; uniform float uTanFov; uniform float uAspectS; uniform float uTimeS;
       void main(){
         if (uMode < 0.5) {
-          float t = clamp(vP.y * 0.5 + 0.5, 0.0, 1.0);
-          vec3 c = mix(uHorizon, uTop, pow(t, 1.4));
+          // reconstruct the view ray so the sky is a real dome, not a flat wash
+          vec3 dir = normalize(uFwd + uRight * (vP.x * uAspectS * uTanFov) + uUp * (vP.y * uTanFov));
+          float h = dir.y;
+          // the chase camera only ever shows ~8 degrees of sky, so compress the
+          // dusk ramp into that band: warm glow at the horizon, blue just above
+          vec3 c = mix(uHorizon, uTop, pow(clamp(h * 7.0, 0.0, 1.0), 0.8));
+          // thin haze band hugging the horizon only
+          c = mix(c, uHorizon * 1.04, smoothstep(0.07, -0.06, h));
+
+          float sd = max(dot(dir, uSunDir), 0.0);
+          // wide warm scatter, tighter halo, then the disc itself
+          c += vec3(1.0, 0.62, 0.34) * pow(sd, 9.0) * 0.3;
+          c += vec3(1.0, 0.72, 0.42) * pow(sd, 48.0) * 0.85;
+          float disc = smoothstep(0.9986, 0.9994, sd);
+          c = mix(c, vec3(1.0, 0.96, 0.86), disc);
+
+          // soft drifting cloud bands, only above the horizon
+          float band = sin(dir.y * 26.0 - uTimeS * 0.05 + sin(dir.x * 5.0 + uTimeS * 0.03) * 1.6);
+          float cloud = smoothstep(0.55, 1.0, band) * smoothstep(0.02, 0.35, h) * 0.16;
+          c = mix(c, vec3(1.0, 0.88, 0.86), cloud);
+
           gl_FragColor = vec4(c, 1.0);
         } else {
+          // filmic finish: warm the frame slightly, darken the corners
           float d = length(vP * vec2(1.0, 0.82));
           float v = smoothstep(0.95, 1.6, d);
-          gl_FragColor = vec4(0.08, 0.07, 0.1, v * 0.17);
+          vec3 tint = mix(vec3(1.0, 0.55, 0.25), vec3(0.07, 0.05, 0.12), v);
+          gl_FragColor = vec4(tint, v * 0.2 + 0.045);
         }
       }`;
     const compile = (type, src) => {
@@ -144,23 +201,40 @@ export class Engine {
     gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
     gl.linkProgram(p);
     this.screenProg = p;
-    this.screenUni = {
-      uMode: gl.getUniformLocation(p, "uMode"),
-      uTop: gl.getUniformLocation(p, "uTop"),
-      uHorizon: gl.getUniformLocation(p, "uHorizon"),
-    };
+    this.screenUni = {};
+    for (const n of ["uMode", "uTop", "uHorizon", "uRight", "uUp", "uFwd", "uSunDir", "uTanFov", "uAspectS", "uTimeS"])
+      this.screenUni[n] = gl.getUniformLocation(p, n);
     this.screenAttrib = gl.getAttribLocation(p, "aP");
     this.screenBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.screenBuf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
   }
 
-  _screenPass(mode, top, horizon) {
+  _screenPass(mode, top, horizon, camera) {
     const gl = this.gl;
     gl.useProgram(this.screenProg);
     gl.uniform1f(this.screenUni.uMode, mode);
     if (top) gl.uniform3f(this.screenUni.uTop, top[0], top[1], top[2]);
     if (horizon) gl.uniform3f(this.screenUni.uHorizon, horizon[0], horizon[1], horizon[2]);
+    if (camera) {
+      const { eye, target, fov, aspect, sun, time } = camera;
+      let fx = target[0] - eye[0], fy = target[1] - eye[1], fz = target[2] - eye[2];
+      let l = Math.hypot(fx, fy, fz) || 1;
+      fx /= l; fy /= l; fz /= l;
+      // right = worldUp × forward, up = right × forward (getting this sign
+      // wrong flips "up" and makes the whole dome sample the horizon colour)
+      let rx = -fz, ry = 0, rz = fx;
+      l = Math.hypot(rx, ry, rz) || 1;
+      rx /= l; ry /= l; rz /= l;
+      const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+      gl.uniform3f(this.screenUni.uFwd, fx, fy, fz);
+      gl.uniform3f(this.screenUni.uRight, rx, ry, rz);
+      gl.uniform3f(this.screenUni.uUp, ux, uy, uz);
+      gl.uniform3f(this.screenUni.uSunDir, sun[0], sun[1], sun[2]);
+      gl.uniform1f(this.screenUni.uTanFov, Math.tan(fov / 2));
+      gl.uniform1f(this.screenUni.uAspectS, aspect);
+      gl.uniform1f(this.screenUni.uTimeS, time);
+    }
     gl.depthMask(false);
     gl.disable(gl.DEPTH_TEST);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.screenBuf);
@@ -172,7 +246,7 @@ export class Engine {
     gl.useProgram(this.prog);
   }
 
-  drawSky(top, horizon) { this._screenPass(0, top, horizon); }
+  drawSky(top, horizon, camera) { this._screenPass(0, top, horizon, camera); }
   drawVignette() { this._screenPass(1); }
 
   setFog(rgb, density) {
@@ -183,8 +257,11 @@ export class Engine {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
-    const w = Math.floor(this.canvas.clientWidth * dpr);
-    const h = Math.floor(this.canvas.clientHeight * dpr);
+    // fall back to the viewport if layout hasn't given the canvas a size yet
+    const cw = this.canvas.clientWidth || window.innerWidth;
+    const ch = this.canvas.clientHeight || window.innerHeight;
+    const w = Math.floor(cw * dpr);
+    const h = Math.floor(ch * dpr);
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
@@ -274,6 +351,7 @@ export class Engine {
     gl.uniform1f(this.uni.uUseTex, opts.texture ? 1 : 0);
     gl.uniform1f(this.uni.uAlpha, opts.alpha !== undefined ? opts.alpha : 1);
     if (opts.override) gl.uniform4f(this.uni.uOverride, opts.override[0], opts.override[1], opts.override[2], 1);
+    if (opts.water) gl.uniform1f(this.uni.uWater, 1);
     gl.bindTexture(gl.TEXTURE_2D, opts.texture || this.white);
     if (opts.additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     if (opts.noDepthWrite) gl.depthMask(false);
@@ -294,7 +372,10 @@ export class Engine {
     if (opts.noDepthWrite) gl.depthMask(true);
     if (opts.additive) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     if (opts.override) gl.uniform4f(this.uni.uOverride, 0, 0, 0, 0);
+    if (opts.water) gl.uniform1f(this.uni.uWater, 0);
   }
+
+  setTime(t) { this.gl.uniform1f(this.uni.uTime, t); }
 }
 
 /* Text → texture helper. Returns {canvas, aspect}. */

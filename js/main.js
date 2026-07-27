@@ -22,6 +22,8 @@ try {
 engine.setFog([0.92, 0.72, 0.68], 0.00004);
 
 const LIGHT = [0.72, 0.5, 0.3]; // must match engine's sun
+const LIGHT_LEN = Math.hypot(...LIGHT);
+const LIGHT_N = LIGHT.map((v) => v / LIGHT_LEN);
 const shadowMat = mat4ShadowY(LIGHT, 0.02);
 const SHADOW = { override: [0.2, 0.13, 0.38], alpha: 0.48 }; // purple dusk shadows
 
@@ -440,6 +442,63 @@ function updateCamera(dt) {
   cam.tx = lerp(cam.tx, tx, k); cam.ty = lerp(cam.ty, ty, k); cam.tz = lerp(cam.tz, tz, k);
 }
 
+/* ---------- minimap ---------- */
+const mmCanvas = document.getElementById("minimap");
+const mm = mmCanvas ? mmCanvas.getContext("2d") : null;
+const MM = { pad: 16 };
+
+function drawMinimap() {
+  if (!mm) return;
+  const S = mmCanvas.width;
+  mm.clearRect(0, 0, S, S);
+  // world → minimap (include the pier strip to the east)
+  const wx0 = BOUNDS.minX - 2, wx1 = PIER.maxX + 2;
+  const wz0 = BOUNDS.minZ - 2, wz1 = BOUNDS.maxZ + 2;
+  const k = Math.min((S - MM.pad * 2) / (wx1 - wx0), (S - MM.pad * 2) / (wz1 - wz0));
+  const ox = (S - (wx1 - wx0) * k) / 2, oz = (S - (wz1 - wz0) * k) / 2;
+  const px = (x) => ox + (x - wx0) * k;
+  const pz = (z) => oz + (z - wz0) * k;
+
+  // land plate + sea strip
+  mm.fillStyle = "rgba(226,160,109,0.5)";
+  mm.fillRect(px(BOUNDS.minX), pz(BOUNDS.minZ), (BOUNDS.maxX - BOUNDS.minX) * k, (BOUNDS.maxZ - BOUNDS.minZ) * k);
+  mm.fillStyle = "rgba(67,173,164,0.55)";
+  mm.fillRect(px(BOUNDS.maxX), pz(wz0), (wx1 - BOUNDS.maxX) * k, (wz1 - wz0) * k);
+
+  // roads
+  mm.strokeStyle = "rgba(255,236,200,0.55)";
+  mm.lineWidth = 2.5;
+  for (const [[ax, az], [bx, bz]] of [[[-40, 0], [32, 0]], [[0, -32], [0, 32]], [[-26, -22], [-26, 22]], [[15, -24], [15, -1]], [[1, 9], [24, 9]]]) {
+    mm.beginPath(); mm.moveTo(px(ax), pz(az)); mm.lineTo(px(bx), pz(bz)); mm.stroke();
+  }
+
+  // zones, brighter once visited
+  for (const z of ZONES) {
+    const col = z.color.map((v) => Math.round(v * 255));
+    const seen = ach.state.sets.zones && ach.state.sets.zones[z.id];
+    mm.beginPath();
+    mm.arc(px(z.x), pz(z.z), z.r * k, 0, Math.PI * 2);
+    mm.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${seen ? 0.5 : 0.28})`;
+    mm.fill();
+    mm.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},0.95)`;
+    mm.lineWidth = seen ? 3 : 2;
+    mm.stroke();
+  }
+
+  // car: a heading arrow
+  const cx = px(car.x), cy = pz(car.z);
+  mm.save();
+  mm.translate(cx, cy);
+  mm.rotate(-car.yaw + Math.PI);
+  mm.fillStyle = "#ff5a4a";
+  mm.strokeStyle = "rgba(255,255,255,0.9)";
+  mm.lineWidth = 2;
+  mm.beginPath();
+  mm.moveTo(0, -11); mm.lineTo(8, 9); mm.lineTo(0, 4); mm.lineTo(-8, 9);
+  mm.closePath(); mm.fill(); mm.stroke();
+  mm.restore();
+}
+
 /* ---------- HUD ---------- */
 const speedEl = document.getElementById("speed");
 let achDist = 0;
@@ -508,11 +567,16 @@ function frame(now) {
   /* debug: ?only=N caps the draw stages for bisecting visual artifacts */
   const only = parseInt(params.get("only") || "99", 10);
 
-  /* 0 — sunset sky gradient behind everything */
-  engine.drawSky([0.45, 0.5, 0.86], [0.99, 0.76, 0.62]);
+  /* 0 — sunset sky dome with a real sun, halo and drifting cloud bands */
+  engine.setTime(time);
+  engine.drawSky([0.42, 0.47, 0.88], [1.0, 0.74, 0.58], {
+    eye: [cam.x, cam.y, cam.z], target: [cam.tx, cam.ty, cam.tz],
+    fov, aspect, sun: LIGHT_N, time,
+  });
 
-  /* 1 — painted ground */
+  /* 1 — painted ground, then the living sea on top of the painted water */
   engine.draw(world.groundMesh, mat4Compose(0, 0, 0), { texture: world.groundTexture });
+  engine.draw(world.waterMesh, mat4Compose(0, 0, 0), { water: true });
 
   /* 2 — skid marks */
   for (const s of skids) {
@@ -636,8 +700,9 @@ function frame(now) {
     });
   }
 
-  /* final touch — vignette */
+  /* final touch — warm grade + vignette, then the minimap */
   engine.drawVignette();
+  drawMinimap();
 
   if (speedEl) speedEl.textContent = Math.round(Math.abs(car.speed) * 4.5) + " km/h";
 
