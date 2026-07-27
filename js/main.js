@@ -472,17 +472,25 @@ function drawMinimap() {
     mm.beginPath(); mm.moveTo(px(ax), pz(az)); mm.lineTo(px(bx), pz(bz)); mm.stroke();
   }
 
-  // zones, brighter once visited
+  // zones: visited ones fill in, unvisited ones pulse to invite a visit
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 420);
   for (const z of ZONES) {
     const col = z.color.map((v) => Math.round(v * 255));
     const seen = ach.state.sets.zones && ach.state.sets.zones[z.id];
     mm.beginPath();
     mm.arc(px(z.x), pz(z.z), z.r * k, 0, Math.PI * 2);
-    mm.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${seen ? 0.5 : 0.28})`;
+    mm.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${seen ? 0.5 : 0.18 + pulse * 0.22})`;
     mm.fill();
     mm.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},0.95)`;
     mm.lineWidth = seen ? 3 : 2;
     mm.stroke();
+    if (!seen) {
+      mm.beginPath();
+      mm.arc(px(z.x), pz(z.z), z.r * k * (1 + pulse * 0.28), 0, Math.PI * 2);
+      mm.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${0.5 * (1 - pulse)})`;
+      mm.lineWidth = 2;
+      mm.stroke();
+    }
   }
 
   // car: a heading arrow
@@ -653,7 +661,23 @@ function frame(now) {
     engine.draw(d.mesh, mat4Compose(d.x, d.y, d.z, d.yaw, d.pitch, d.roll, d.scale), d.texture ? { texture: d.texture } : {});
   }
 
-  engine.draw(world.ferry.mesh, mat4Compose(world.ferry.x, -0.15, world.ferry.z, world.ferry.yaw));
+  /* ferry rides the same swell the water shader draws, and leaves a wake */
+  {
+    const f = world.ferry;
+    const swellAt = (x, z) =>
+      Math.sin(x * 0.42 + time * 0.85) * 0.34 +
+      Math.sin(z * 0.31 - time * 0.63 + x * 0.12) * 0.34 +
+      Math.sin(x * 0.7 + z * 0.55 + time * 1.35) * 0.2;
+    const s0 = swellAt(f.x, f.z);
+    const pitch = (swellAt(f.x, f.z - 2.4) - swellAt(f.x, f.z + 2.4)) * 0.06;
+    const roll = (swellAt(f.x - 1, f.z) - swellAt(f.x + 1, f.z)) * 0.05;
+    engine.draw(f.mesh, mat4Compose(f.x, -0.2 + s0 * 0.09, f.z, f.yaw, pitch, roll));
+    for (let i = 0; i < 4; i++) {
+      const t = i / 4;
+      drawGlow(f.x + (i % 2 ? 0.8 : -0.8), 0.06, f.z + 3.2 + i * 1.5,
+        1.0 + i * 0.5, [0.95, 1.0, 1.0], 0.22 * (1 - t));
+    }
+  }
   engine.draw(world.tram.mesh, mat4Compose(world.tram.x, 0, world.tram.z));
 
   /* seagulls circling over the water */
