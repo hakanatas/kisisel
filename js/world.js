@@ -394,6 +394,8 @@ export function buildWorld(engine, models = {}) {
   const cityRow = [
     ["bld1", 20, -28.5, Math.PI, 3.2],       // real model where one fits
     ["cafe", 20.5, 12, 0.4, 2.2],            // tea garden by the shore
+    ["scooter1", 18.4, 10.2, 1.9, 0.7],      // courier scooter parked at the tea garden
+    ["scooter2", -22.6, -13.4, -0.7, 0.7],   // another one by the park bench
   ];
   for (const [key, bx, bz, byaw, br] of cityRow) {
     if (models[key]) { glbPropsPending.push({ type: key, x: bx, z: bz, yaw: byaw, s: 1 }); collide(bx, bz, br); }

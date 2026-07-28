@@ -81,7 +81,7 @@ async function loadBaked(url, targetH) {
   return [{ mesh: engine.meshFromGeo({ verts: v }), texture: null }];
 }
 /* fetch + decode everything concurrently (much faster than sequential) */
-const [rGalata, rCar, rTree, rLamp, rGrass, rHouse, rB1, rCafe] = await Promise.allSettled([
+const [rGalata, rCar, rTree, rLamp, rGrass, rHouse, rB1, rCafe, rSc1, rSc2] = await Promise.allSettled([
   loadGLB("assets/galata.glb", engine),
   loadGLB("assets/car.glb", engine),
   loadTreeType("assets/tree1.glb", 4.6),
@@ -90,6 +90,8 @@ const [rGalata, rCar, rTree, rLamp, rGrass, rHouse, rB1, rCafe] = await Promise.
   loadTreeType("assets/house.glb", 4.4),
   loadBaked("assets/bld1.json", 6.2),
   loadBaked("assets/bld3.json", 2.4),   // café tables with parasols
+  loadBaked("assets/scooter1.json", 1.15),
+  loadBaked("assets/scooter2.json", 1.1),
 ]);
 if (rGalata.status === "fulfilled") {
   models.galata = { nodes: rGalata.value.nodes, bounds: vertsBounds(rGalata.value.nodes.map((n) => n.verts)) };
@@ -109,7 +111,7 @@ models.hasLamp = !!propTypes.lamp;
 models.hasGrass = !!propTypes.grass;
 models.hasHouse = !!propTypes.house;
 models.hasBench = false;
-for (const [key, res] of [["bld1", rB1], ["cafe", rCafe]]) {
+for (const [key, res] of [["bld1", rB1], ["cafe", rCafe], ["scooter1", rSc1], ["scooter2", rSc2]]) {
   if (res.status === "fulfilled") { propTypes[key] = res.value; models[key] = true; }
   else console.warn(key, "yüklenemedi", res.reason);
 }
