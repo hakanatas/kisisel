@@ -396,13 +396,21 @@ export function buildWorld(engine, models = {}) {
     ["cafe", 20.5, 12, 0.4, 2.2],            // tea garden by the shore
     ["scooter1", 18.4, 10.2, 1.9, 0.7],      // courier scooter parked at the tea garden
     ["scooter2", -22.6, -13.4, -0.7, 0.7],   // another one by the park bench
+    ["tower", 10.5, -29, Math.PI, 2.8],      // Kenney tower block
+    ["shop", 25.5, -25.5, Math.PI * 0.92, 2.4],
+    ["light", 2.6, 2.6, -Math.PI * 0.75, 0.3],   // traffic lights at the junction
+    ["light", -2.6, -2.6, Math.PI * 0.25, 0.3],
+    ["sign", 2.7, -2.7, Math.PI * 0.25, 0.3],
+    ["sign", 16.9, -1.9, -Math.PI * 0.4, 0.3],
+    ["bike", -24.6, 20.9, 0.9, 0.5],         // parked by the Projects plaza
+    ["bike", 3.4, 12.6, -1.2, 0.5],
   ];
   for (const [key, bx, bz, byaw, br] of cityRow) {
     if (models[key]) { glbPropsPending.push({ type: key, x: bx, z: bz, yaw: byaw, s: 1 }); collide(bx, bz, br); }
   }
   if (!models.bld1) bld(20, -28, 4.5, 4.4, 3.4, [0.85, 0.62, 0.5], Math.PI);
-  bld(10, -29, 3.6, 3.3, 3.2, [0.6, 0.68, 0.78], Math.PI);
-  bld(25.5, -25, 3.2, 5.5, 3.0, [0.8, 0.76, 0.66], Math.PI * 0.9);
+  if (!models.tower) bld(10, -29, 3.6, 3.3, 3.2, [0.6, 0.68, 0.78], Math.PI);
+  if (!models.shop) bld(25.5, -25, 3.2, 5.5, 3.0, [0.8, 0.76, 0.66], Math.PI * 0.9);
 
   /* blossom & autumn blob trees */
   const trees = [
