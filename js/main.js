@@ -87,20 +87,18 @@ const withDeadline = (p, ms = 20000) =>
   Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("zaman aşımı")), ms))]);
 
 /* fetch + decode everything concurrently (much faster than sequential) */
-const [rGalata, rCar, rTree, rLamp, rGrass, rHouse, rB1, rCafe, rSc1, rSc2,
-       rTower, rShop, rLight, rSign, rBike] = await Promise.allSettled([
+const [rGalata, rCar, rTree, rLamp, rGrass, rHouse, rCafe, rSc1, rSc2,
+       rTower, rLight, rSign, rBike] = await Promise.allSettled([
   withDeadline(loadGLB("assets/galata.glb", engine)),
   withDeadline(loadGLB("assets/car.glb", engine)),
   withDeadline(loadTreeType("assets/tree1.glb", 4.6)),
   withDeadline(loadBaked("assets/lamp.json", 2.9)),
   withDeadline(loadBaked("assets/grass.json", 0.5)),
   withDeadline(loadTreeType("assets/house.glb", 4.4)),
-  withDeadline(loadBaked("assets/bld1.json", 6.2)),
   withDeadline(loadBaked("assets/bld3.json", 2.4)),   // café tables with parasols
   withDeadline(loadBaked("assets/scooter1.json", 1.15)),
   withDeadline(loadBaked("assets/scooter2.json", 1.1)),
   withDeadline(loadTreeType("assets/tower.glb", 7.6)),
-  withDeadline(loadTreeType("assets/shop.glb", 5.2)),
   withDeadline(loadTreeType("assets/trafficlight.glb", 2.7)),
   withDeadline(loadTreeType("assets/stopsign.glb", 2.1)),
   withDeadline(loadTreeType("assets/bicycle.glb", 1.1)),
@@ -123,8 +121,8 @@ models.hasLamp = !!propTypes.lamp;
 models.hasGrass = !!propTypes.grass;
 models.hasHouse = !!propTypes.house;
 models.hasBench = false;
-for (const [key, res] of [["bld1", rB1], ["cafe", rCafe], ["scooter1", rSc1], ["scooter2", rSc2],
-  ["tower", rTower], ["shop", rShop], ["light", rLight], ["sign", rSign], ["bike", rBike]]) {
+for (const [key, res] of [["cafe", rCafe], ["scooter1", rSc1], ["scooter2", rSc2],
+  ["tower", rTower], ["light", rLight], ["sign", rSign], ["bike", rBike]]) {
   if (res.status === "fulfilled") { propTypes[key] = res.value; models[key] = true; }
   else console.warn(key, "yüklenemedi", res.reason);
 }

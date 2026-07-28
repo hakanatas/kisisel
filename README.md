@@ -72,7 +72,7 @@ fonksiyonlarla kurulu.
 
 - **Galata Kulesi** — Hakan Ataş (bu proje için)
 - **Araba + Büyük bina** (`car.glb`, `tower.glb`) — [Kenney](https://kenney.nl) (CC0)
-- **Trafik lambası + dükkan** (`trafficlight.glb`, `shop.glb`) — Kay Lousberg, [Poly Pizza](https://poly.pizza) (CC0)
+- **Trafik lambası** (`trafficlight.glb`) — Kay Lousberg, [Poly Pizza](https://poly.pizza) (CC0)
 - **Dur levhası + bisiklet** (`stopsign.glb`, `bicycle.glb`) — Poly by Google, [Poly Pizza](https://poly.pizza) (CC-BY)
 - **"Tree"** (`tree1.glb`) — [farhad.Guli](https://skfb.ly/U8nv), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
 - **"Low Poly Psx Street lamp"** (`lamp.json`, köşe renklerine pişirilmiş) — [SaukrDev](https://skfb.ly/oMORx), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
