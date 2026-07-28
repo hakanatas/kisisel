@@ -81,13 +81,15 @@ async function loadBaked(url, targetH) {
   return [{ mesh: engine.meshFromGeo({ verts: v }), texture: null }];
 }
 /* fetch + decode everything concurrently (much faster than sequential) */
-const [rGalata, rCar, rTree, rLamp, rGrass, rHouse] = await Promise.allSettled([
+const [rGalata, rCar, rTree, rLamp, rGrass, rHouse, rB1, rCafe] = await Promise.allSettled([
   loadGLB("assets/galata.glb", engine),
   loadGLB("assets/car.glb", engine),
   loadTreeType("assets/tree1.glb", 4.6),
   loadBaked("assets/lamp.json", 2.9),
   loadBaked("assets/grass.json", 0.5),
   loadTreeType("assets/house.glb", 4.4),
+  loadBaked("assets/bld1.json", 6.2),
+  loadBaked("assets/bld3.json", 2.4),   // café tables with parasols
 ]);
 if (rGalata.status === "fulfilled") {
   models.galata = { nodes: rGalata.value.nodes, bounds: vertsBounds(rGalata.value.nodes.map((n) => n.verts)) };
@@ -107,6 +109,10 @@ models.hasLamp = !!propTypes.lamp;
 models.hasGrass = !!propTypes.grass;
 models.hasHouse = !!propTypes.house;
 models.hasBench = false;
+for (const [key, res] of [["bld1", rB1], ["cafe", rCafe]]) {
+  if (res.status === "fulfilled") { propTypes[key] = res.value; models[key] = true; }
+  else console.warn(key, "yüklenemedi", res.reason);
+}
 
 setLoad("Dünya inşa ediliyor…");
 const world = buildWorld(engine, models);

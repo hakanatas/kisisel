@@ -389,7 +389,16 @@ export function buildWorld(engine, models = {}) {
     props.verts.push(...b.verts);
     collide(x, z, Math.max(w, d) * 0.62);
   };
-  bld(20, -28, 4.5, 4.4, 3.4, [0.85, 0.62, 0.5], Math.PI);
+  const glbPropsPending = [];
+  // real building models where we have them, boxes as the fallback
+  const cityRow = [
+    ["bld1", 20, -28.5, Math.PI, 3.2],       // real model where one fits
+    ["cafe", 20.5, 12, 0.4, 2.2],            // tea garden by the shore
+  ];
+  for (const [key, bx, bz, byaw, br] of cityRow) {
+    if (models[key]) { glbPropsPending.push({ type: key, x: bx, z: bz, yaw: byaw, s: 1 }); collide(bx, bz, br); }
+  }
+  if (!models.bld1) bld(20, -28, 4.5, 4.4, 3.4, [0.85, 0.62, 0.5], Math.PI);
   bld(10, -29, 3.6, 3.3, 3.2, [0.6, 0.68, 0.78], Math.PI);
   bld(25.5, -25, 3.2, 5.5, 3.0, [0.8, 0.76, 0.66], Math.PI * 0.9);
 
@@ -413,7 +422,7 @@ export function buildWorld(engine, models = {}) {
     }
     collide(x, z, 0.5);
   });
-  const glbProps = [];
+  const glbProps = glbPropsPending;
   const glowPts = [];
   const benchSpots = [[-24, -14.5, Math.PI], [18, 12.5, -Math.PI / 2], [-30, 16.5, 0.6]];
   for (const [bx, bz, byaw] of benchSpots) {

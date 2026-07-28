@@ -75,6 +75,7 @@ fonksiyonlarla kurulu.
 - **"Tree"** (`tree1.glb`) — [farhad.Guli](https://skfb.ly/U8nv), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
 - **"Low Poly Psx Street lamp"** (`lamp.json`, köşe renklerine pişirilmiş) — [SaukrDev](https://skfb.ly/oMORx), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
 - **"Lowpoly grass"** (`grass.json`, köşe renklerine pişirilmiş) — [Atrikumar Das](https://skfb.ly/pAwrt), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
+- **"LOWPOLY CITY STREET PACK"** (`bld1.json` bina, `bld3.json` çay bahçesi — geometri çıkarılıp kendi paletimizle boyandı) — [haykel-shaba](https://skfb.ly/6UFSy), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
 - **"Forest House"** (`house.glb`, evim dioraması) — [Wesai](https://skfb.ly/6C7BP), [CC-BY 4.0](http://creativecommons.org/licenses/by/4.0/)
 
 ## Yerelde çalıştırma
